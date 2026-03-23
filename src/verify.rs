@@ -265,6 +265,78 @@ fn progress_bar(size: u64, verb: &str) -> ProgressBar {
     pb
 }
 
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::io::Write;
+
+    fn write_tmp(data: &[u8]) -> std::path::PathBuf {
+        let mut path = std::env::temp_dir();
+        path.push(format!(
+            "mhf_outpost_test_{}.bin",
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap()
+                .subsec_nanos()
+        ));
+        let mut f = std::fs::File::create(&path).unwrap();
+        f.write_all(data).unwrap();
+        path
+    }
+
+    // SHA-256 of empty input: well-known test vector.
+    #[test]
+    fn sha256_empty() {
+        let p = write_tmp(b"");
+        let h = hash_file_sha256(&p).unwrap();
+        std::fs::remove_file(&p).ok();
+        assert_eq!(
+            h,
+            "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        );
+    }
+
+    // SHA-256("abc") — cross-checked with sha256sum(1).
+    #[test]
+    fn sha256_abc() {
+        let p = write_tmp(b"abc");
+        let h = hash_file_sha256(&p).unwrap();
+        std::fs::remove_file(&p).ok();
+        assert_eq!(
+            h,
+            "ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad"
+        );
+    }
+
+    // SHA-1 of empty input: well-known test vector.
+    #[test]
+    fn sha1_empty() {
+        let p = write_tmp(b"");
+        let h = hash_file_sha1(&p).unwrap();
+        std::fs::remove_file(&p).ok();
+        assert_eq!(h, "da39a3ee5e6b4b0d3255bfef95601890afd80709");
+    }
+
+    // SHA-1("abc") — RFC 3174 §7.3 example.
+    #[test]
+    fn sha1_abc() {
+        let p = write_tmp(b"abc");
+        let h = hash_file_sha1(&p).unwrap();
+        std::fs::remove_file(&p).ok();
+        assert_eq!(h, "a9993e364706816aba3e25717850c26c9cd0d89d");
+    }
+
+    // hash_file is the same as hash_file_sha256.
+    #[test]
+    fn hash_file_alias() {
+        let p = write_tmp(b"hello");
+        let a = hash_file(&p).unwrap();
+        let b = hash_file_sha256(&p).unwrap();
+        std::fs::remove_file(&p).ok();
+        assert_eq!(a, b);
+    }
+}
+
 fn hash_with_progress_sha1(path: &Path, pb: &ProgressBar) -> Result<String, std::io::Error> {
     let file = File::open(path)?;
     let mut reader = BufReader::new(file);

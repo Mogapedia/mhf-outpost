@@ -167,3 +167,120 @@ impl Manifest {
         self.files.iter().filter(|f| !f.is_placeholder()).count()
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::path::Path;
+
+    // ── FileEntry::is_placeholder ────────────────────────────────────────────
+
+    #[test]
+    fn placeholder_all_zeros() {
+        let entry = FileEntry {
+            path: "test.exe".into(),
+            sha256: "0".repeat(64),
+            size: 0,
+            optional: false,
+            kind: FileKind::Core,
+        };
+        assert!(entry.is_placeholder());
+    }
+
+    #[test]
+    fn placeholder_empty_sha256() {
+        let entry = FileEntry {
+            path: "test.exe".into(),
+            sha256: String::new(),
+            size: 0,
+            optional: false,
+            kind: FileKind::Core,
+        };
+        assert!(entry.is_placeholder());
+    }
+
+    #[test]
+    fn not_placeholder_with_real_hash() {
+        let entry = FileEntry {
+            path: "test.exe".into(),
+            sha256: "ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad".into(),
+            size: 1234,
+            optional: false,
+            kind: FileKind::Core,
+        };
+        assert!(!entry.is_placeholder());
+    }
+
+    // ── FileEntry::absolute ──────────────────────────────────────────────────
+
+    #[test]
+    fn absolute_joins_root_and_path() {
+        let entry = FileEntry {
+            path: "mhf/mhf.exe".into(),
+            sha256: "0".repeat(64),
+            size: 0,
+            optional: false,
+            kind: FileKind::Core,
+        };
+        let root = Path::new("/game");
+        let abs = entry.absolute(root);
+        // Forward slashes in path are normalised to the OS separator.
+        assert!(abs.starts_with("/game"));
+        assert!(abs.ends_with("mhf.exe"));
+    }
+
+    // ── Manifest::load — embedded manifests round-trip ───────────────────────
+
+    #[test]
+    fn load_known_version_zz() {
+        let m = Manifest::load("zz").expect("zz manifest should be embedded");
+        assert_eq!(m.version.id.to_ascii_uppercase(), "ZZ");
+        assert!(!m.version.name.is_empty());
+    }
+
+    #[test]
+    fn load_unknown_version_errors() {
+        let result = Manifest::load("does_not_exist");
+        assert!(result.is_err());
+    }
+
+    // ── Manifest::load_file — inline TOML round-trip ─────────────────────────
+
+    #[test]
+    fn load_file_minimal_toml() {
+        use std::io::Write;
+        let toml = r#"
+[version]
+id = "TEST"
+name = "Test Version"
+description = "Unit test manifest"
+platform = "PC"
+
+[[files]]
+path = "test.exe"
+sha256 = "ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad"
+size = 1024
+"#;
+        let mut tmp = std::env::temp_dir();
+        tmp.push("mhf_outpost_manifest_test.toml");
+        {
+            let mut f = std::fs::File::create(&tmp).unwrap();
+            f.write_all(toml.as_bytes()).unwrap();
+        }
+        let m = Manifest::load_file(&tmp).expect("should parse minimal TOML");
+        std::fs::remove_file(&tmp).ok();
+
+        assert_eq!(m.version.id, "TEST");
+        assert_eq!(m.files.len(), 1);
+        assert!(!m.files[0].is_placeholder());
+        assert_eq!(m.recorded_count(), 1);
+    }
+
+    // ── Manifest::all ────────────────────────────────────────────────────────
+
+    #[test]
+    fn all_returns_non_empty_list() {
+        let all = Manifest::all();
+        assert!(!all.is_empty(), "at least one embedded manifest expected");
+    }
+}
