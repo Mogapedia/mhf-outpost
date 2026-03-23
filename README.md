@@ -2,7 +2,7 @@
 
 GUI installer and launcher for Monster Hunter Frontier, part of the [Mogapedia](https://mogapedia.fr) preservation ecosystem.
 
-mhf-outpost downloads and verifies game archives, authenticates against an [Erupe](../server/Erupe) server, and launches the game via [mhf-iel](../mhf-iel). Authentication is handled entirely inside the launcher — the game only receives control once a valid session token has been written to `config.json`.
+mhf-outpost downloads and verifies game archives, authenticates against an [Erupe](https://github.com/Mezeporta/Erupe) server, and launches the game via [mhf-iel](https://github.com/rockisch/mhf-iel). Authentication is handled entirely inside the launcher — the game only receives control once a valid session token has been written to `config.json`.
 
 Built with [Tauri 2](https://tauri.app) (Rust backend) and Vue 3 (frontend).
 
@@ -104,10 +104,8 @@ Each supported game version has a TOML manifest in `manifests/` that records the
 
 | Project | Role |
 |---------|------|
-| [Erupe](../server/Erupe) | Server emulator (sign, entrance, channel servers) |
-| [mhf-iel](../mhf-iel) | Thin launcher that starts `mhf.exe` from `config.json` |
-| [MHBridge](../MHBridge) | C++ protocol RE client and model viewer |
-| [OpenFrontier](../OpenFrontier) | Clean-room Godot game client |
+| [Erupe](https://github.com/Mezeporta/Erupe) | Server emulator (sign, entrance, channel servers) |
+| [mhf-iel](https://github.com/rockisch/mhf-iel) | Thin launcher that starts `mhf.exe` from `config.json` |
 
 ## License
 
