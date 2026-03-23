@@ -1,0 +1,16 @@
+[version]
+id          = "G91"
+name        = "G9.1"
+description = "G9.1 late G-series"
+platform    = "pc"
+
+[archive]
+identifier = "MHFG91"
+filename   = "Monster Hunter Frontier G9.1.zip"
+format     = "ZIP"
+size       = 4034482047
+sha1       = "12179079a78767337ba6751b9a427a804ddeb618"
+md5        = "83e9df8dcb38c395d4a3ab7fa0bd4842"
+
+# [[files]] entries not yet recorded.
+# Run: mhf-installer hash-dir <extracted_dir> --toml

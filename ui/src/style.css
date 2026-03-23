@@ -1,0 +1,45 @@
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+:root {
+  --bg-deep:    #0f1117;
+  --bg-panel:   #181b24;
+  --bg-card:    #1e2130;
+  --bg-hover:   #252840;
+  --accent:     #c9a84c;   /* MHF gold */
+  --accent-dim: #8a6f2e;
+  --text:       #e8e8e0;
+  --text-dim:   #8a8a7a;
+  --ok:         #4caf73;
+  --warn:       #e0a030;
+  --err:        #cf4f4f;
+  --border:     #2a2e40;
+}
+
+body {
+  background: var(--bg-deep);
+  color: var(--text);
+  font-family: 'Segoe UI', system-ui, sans-serif;
+  font-size: 14px;
+  height: 100vh;
+  overflow: hidden;
+  user-select: none;
+}
+
+#app { height: 100vh; display: flex; flex-direction: column; }
+
+button {
+  cursor: pointer;
+  border: none;
+  outline: none;
+  font-family: inherit;
+  font-size: inherit;
+}
+
+input, select {
+  font-family: inherit;
+  font-size: inherit;
+}
+
+::-webkit-scrollbar { width: 6px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }

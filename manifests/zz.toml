@@ -1,0 +1,128 @@
+[version]
+id          = "ZZ"
+name        = "G10-ZZ"
+description = "Latest PC version (2023-11-15 build) — no archive.org upload"
+platform    = "pc"
+
+# No archive.org source for ZZ — obtain files through the community.
+# Run: mhf-installer hash-dir <game_dir> --toml --exclude GameGuard --exclude mods
+# to generate the sha256 entries below.
+
+# ── Core executables ──────────────────────────────────────────────────────────
+[[files]]
+path   = "mhf.exe"
+sha256 = "0000000000000000000000000000000000000000000000000000000000000000"
+kind   = "core"
+
+[[files]]
+path   = "mhfo-hd.dll"
+sha256 = "0000000000000000000000000000000000000000000000000000000000000000"
+kind   = "core"
+
+[[files]]
+path   = "mhl.dll"
+sha256 = "0000000000000000000000000000000000000000000000000000000000000000"
+kind   = "core"
+
+# ── DirectX / runtime DLLs ────────────────────────────────────────────────────
+[[files]]
+path   = "d3d9.dll"
+sha256 = "0000000000000000000000000000000000000000000000000000000000000000"
+kind   = "core"
+
+[[files]]
+path   = "gdiplus.dll"
+sha256 = "0000000000000000000000000000000000000000000000000000000000000000"
+kind   = "core"
+
+[[files]]
+path   = "ogg.dll"
+sha256 = "0000000000000000000000000000000000000000000000000000000000000000"
+kind   = "core"
+
+[[files]]
+path   = "vorbis.dll"
+sha256 = "0000000000000000000000000000000000000000000000000000000000000000"
+kind   = "core"
+
+# ── Server URL lists — expected to be modified for community servers ───────────
+[[files]]
+path   = "url.lst"
+sha256 = "0000000000000000000000000000000000000000000000000000000000000000"
+kind   = "url"
+
+[[files]]
+path   = "url_hangame.lst"
+sha256 = "0000000000000000000000000000000000000000000000000000000000000000"
+kind   = "url"
+
+[[files]]
+path   = "url_dmm.lst"
+sha256 = "0000000000000000000000000000000000000000000000000000000000000000"
+kind   = "url"
+
+# ── User configuration — expected to vary per install ────────────────────────
+[[files]]
+path     = "mhf.ini"
+sha256   = "0000000000000000000000000000000000000000000000000000000000000000"
+kind     = "config"
+optional = true
+
+[[files]]
+path     = "mhf2.ini"
+sha256   = "0000000000000000000000000000000000000000000000000000000000000000"
+kind     = "config"
+optional = true
+
+[[files]]
+path   = "MonsterHJP.ini"
+sha256 = "0000000000000000000000000000000000000000000000000000000000000000"
+kind   = "config"
+
+# ── Anti-cheat ────────────────────────────────────────────────────────────────
+[[files]]
+path     = "GameGuard.des"
+sha256   = "0000000000000000000000000000000000000000000000000000000000000000"
+kind     = "core"
+optional = true
+
+# ── Game data — often modified for fan translations; may contain modded values ─
+[[files]]
+path   = "dat/effect.bin"
+sha256 = "0000000000000000000000000000000000000000000000000000000000000000"
+kind   = "translation"
+
+[[files]]
+path   = "dat/fwmap.txb"
+sha256 = "0000000000000000000000000000000000000000000000000000000000000000"
+kind   = "translation"
+
+[[files]]
+path   = "dat/fwq.txb"
+sha256 = "0000000000000000000000000000000000000000000000000000000000000000"
+kind   = "translation"
+
+# ── UI textures — not typically translated, treat as core ─────────────────────
+[[files]]
+path   = "dat/charsel.txb"
+sha256 = "0000000000000000000000000000000000000000000000000000000000000000"
+kind   = "core"
+
+[[files]]
+path   = "dat/demo.txb"
+sha256 = "0000000000000000000000000000000000000000000000000000000000000000"
+kind   = "core"
+
+# ── Save / user data ──────────────────────────────────────────────────────────
+[[files]]
+path     = "dat/guildcard.bin"
+sha256   = "0000000000000000000000000000000000000000000000000000000000000000"
+kind     = "config"
+optional = true
+
+# ── Launcher ──────────────────────────────────────────────────────────────────
+[[files]]
+path     = "mhf-iel-cli.exe"
+sha256   = "0000000000000000000000000000000000000000000000000000000000000000"
+kind     = "core"
+optional = true

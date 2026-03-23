@@ -1,0 +1,16 @@
+[version]
+id          = "G52"
+name        = "G5.2"
+description = "G5.2 mid G-series"
+platform    = "pc"
+
+[archive]
+identifier = "monster-hunter-frontier-g-5.2"
+filename   = "Monster Hunter Frontier G5.2.zip"
+format     = "ZIP"
+size       = 1965773017
+sha1       = "d2162e74cc82a3b3b6618a1967f99246b50b6916"
+md5        = "3f76d498bdeeb5ce6988fcc6ea482581"
+
+# [[files]] entries not yet recorded.
+# Run: mhf-installer hash-dir <extracted_dir> --toml

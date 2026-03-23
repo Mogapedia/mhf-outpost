@@ -1,0 +1,16 @@
+[version]
+id          = "S6"
+name        = "Season 6.0"
+description = "Very early season version"
+platform    = "pc"
+
+[archive]
+identifier = "mhfo-season-6.0"
+filename   = "Monster Hunter Frontier Season 6.0.zip"
+format     = "ZIP"
+size       = 635609088
+sha1       = "003f40dbcf439dada38d46be7850631b8ffe61e8"
+md5        = "3a93c0bd658651a83cc9189ba1843bd0"
+
+# [[files]] entries not yet recorded.
+# Run: mhf-installer hash-dir <extracted_dir> --toml

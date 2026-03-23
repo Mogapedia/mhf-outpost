@@ -1,0 +1,16 @@
+[version]
+id          = "G1"
+name        = "G1.0"
+description = "First G-series release"
+platform    = "pc"
+
+[archive]
+identifier = "mhfg-1.0"
+filename   = "Monster Hunter Frontier G1.zip"
+format     = "ZIP"
+size       = 1549484964
+sha1       = "91aa95cad318dd5c2abc1be1f2d0d257d633b717"
+md5        = "ee6206f5458631b651ae4b3ec4f82c89"
+
+# [[files]] entries not yet recorded.
+# Run: mhf-installer hash-dir <extracted_dir> --toml

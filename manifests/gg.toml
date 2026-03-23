@@ -1,0 +1,16 @@
+[version]
+id          = "GG"
+name        = "GG"
+description = "G-series GG variant"
+platform    = "pc"
+
+[archive]
+identifier = "MHFGG"
+filename   = "MHFGG.zip"
+format     = "ZIP"
+size       = 1714291861
+sha1       = "3a7b20c1bc69b56d100306f1db9ce7f4770a2513"
+md5        = "8f928b2d31ca7d0321df1ec4a0af801d"
+
+# [[files]] entries not yet recorded.
+# Run: mhf-installer hash-dir <extracted_dir> --toml

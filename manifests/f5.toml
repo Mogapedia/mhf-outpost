@@ -1,0 +1,16 @@
+[version]
+id          = "F5"
+name        = "Forward.5"
+description = "Forward.5 pre-G series"
+platform    = "pc"
+
+[archive]
+identifier = "monster-hunter-frontier-forward-5"
+filename   = "Monster Hunter Frontier Forward 5.zip"
+format     = "ZIP"
+size       = 1388637296
+sha1       = "9058e2008099f0a4594571223431ad738a0f1cc6"
+md5        = "8201367ff0c5c62669c6b91e415246b5"
+
+# [[files]] entries not yet recorded.
+# Run: mhf-installer hash-dir <extracted_dir> --toml

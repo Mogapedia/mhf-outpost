@@ -1,0 +1,19 @@
+[version]
+id          = "WIIU"
+name        = "Wii U Z2"
+description = "Wii U G3-Z2 collection (v2064 = latest)"
+platform    = "wiiu"
+
+# The archive.org item contains multiple Wii U versions (G3 through Z2).
+# This manifest targets the latest: Z2 v2064.
+# Other versions in the same item: G3 (v192), G10.1 (v1616).
+[archive]
+identifier = "wu-monster-hunter-frontier-g3-z2"
+filename   = "[WU] Monster Hunter Frontier Z2 (v2064).7z"
+format     = "7z"
+size       = 3480000000
+sha1       = "565f003e56085e5c2e0851a1286117f07ca36903"
+md5        = "f146c84f44b2c7090aae95d372798269"
+
+# [[files]] entries not yet recorded.
+# Run: mhf-installer hash-dir <extracted_dir> --toml

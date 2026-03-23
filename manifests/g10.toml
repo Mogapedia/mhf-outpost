@@ -1,0 +1,16 @@
+[version]
+id          = "G10"
+name        = "G10.1"
+description = "G10.1 JP build"
+platform    = "pc"
+
+[archive]
+identifier = "mhf-g-10-jp"
+filename   = "MHF G10.1 JP.rar"
+format     = "RAR"
+size       = 4357967997
+sha1       = "bfd6be94316eda00ea36b2227bfae1b5445a067e"
+md5        = "08c99654b680b32d3f2de08a62620864"
+
+# [[files]] entries not yet recorded.
+# Run: mhf-installer hash-dir <extracted_dir> --toml
