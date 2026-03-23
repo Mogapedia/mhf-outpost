@@ -250,3 +250,48 @@ pub async fn select_character(
     .await
     .map_err(|e| e.to_string())?
 }
+
+/// Write config.json for the given game path/version then immediately launch.
+/// This is the primary launch path: auth happens inside the launcher, and the
+/// game (mhfo-hd.dll / mhfo.dll) only receives control once config.json has
+/// been written with a valid session token.
+/// Pass `char_id = 0` to create a new character.
+#[tauri::command]
+pub async fn launch_game_authed(
+    path: String,
+    version: String,
+    server: String,
+    session_json: String,
+    char_id: u32,
+) -> Result<(), String> {
+    tauri::async_runtime::spawn_blocking(move || {
+        let login: auth::LoginResponse = serde_json::from_str(&session_json)
+            .map_err(|e| format!("invalid session: {e}"))?;
+
+        let (id, char_data) = if char_id == 0 {
+            let new_char = auth::create_character(&server, &login.user.token)
+                .map_err(|e| e.to_string())?;
+            let id = new_char.id;
+            (id, new_char)
+        } else {
+            let c = login.characters.iter().find(|c| c.id == char_id)
+                .ok_or_else(|| format!("character {char_id} not found"))?
+                .clone();
+            (c.id, c)
+        };
+
+        auth::save_config(
+            std::path::Path::new(&path),
+            &server,
+            &login,
+            id,
+            &char_data,
+            &version,
+        ).map_err(|e| e.to_string())?;
+
+        launcher::launch(std::path::Path::new(&path), false)
+            .map_err(|e| e.to_string())
+    })
+    .await
+    .map_err(|e| e.to_string())?
+}

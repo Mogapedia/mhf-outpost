@@ -2144,7 +2144,20 @@ dependencies = [
 ]
 
 [[package]]
-name = "mhf-installer"
+name = "mhf-launcher-app"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "mhf-outpost",
+ "serde",
+ "serde_json",
+ "tauri",
+ "tauri-build",
+ "tauri-plugin-dialog",
+]
+
+[[package]]
+name = "mhf-outpost"
 version = "0.1.0"
 dependencies = [
  "anyhow",
@@ -2160,19 +2173,6 @@ dependencies = [
  "toml 0.8.2",
  "walkdir",
  "zip",
-]
-
-[[package]]
-name = "mhf-launcher-app"
-version = "0.1.0"
-dependencies = [
- "anyhow",
- "mhf-installer",
- "serde",
- "serde_json",
- "tauri",
- "tauri-build",
- "tauri-plugin-dialog",
 ]
 
 [[package]]

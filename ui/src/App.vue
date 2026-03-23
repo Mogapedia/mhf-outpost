@@ -31,11 +31,13 @@ interface ProgressEvent {
   message: string | null
 }
 
+interface CharDto { id: number; name: string; hr: number; gr: number; is_female: boolean }
+
 // ── State ────────────────────────────────────────────────────────────────────
 
 const versions = ref<Version[]>([])
 const selectedId = ref<string | null>(null)
-const view = ref<'library' | 'checks' | 'settings'>('library')
+const view = ref<'library' | 'server' | 'checks'>('library')
 
 // Per-version installed paths (stored in localStorage)
 const installedPaths = ref<Record<string, string>>(
@@ -53,34 +55,24 @@ const checkGamePath = ref('')
 // Download state
 const downloading = ref<Record<string, { phase: string; progress: number; message: string }>>({})
 
-// Per-version server URL (stored in localStorage)
-const serverUrls = ref<Record<string, string>>(
-  JSON.parse(localStorage.getItem('serverUrls') || '{}')
-)
-function saveServerUrls() {
-  localStorage.setItem('serverUrls', JSON.stringify(serverUrls.value))
-}
-const selectedServerUrl = computed({
-  get: () => selectedId.value ? (serverUrls.value[selectedId.value] ?? 'http://127.0.0.1:8080') : '',
-  set: (v: string) => {
-    if (selectedId.value) { serverUrls.value[selectedId.value] = v; saveServerUrls() }
-  }
-})
+// ── Server / auth state ───────────────────────────────────────────────────────
+// Global — independent of which client version is selected.
 
-// Auth modal state
-interface CharDto { id: number; name: string; hr: number; gr: number; is_female: boolean }
-const authModal = ref(false)
-const authStep = ref<'credentials' | 'characters'>('credentials')
+const serverUrl = ref(localStorage.getItem('serverUrl') ?? 'http://127.0.0.1:8080')
+function saveServerUrl() { localStorage.setItem('serverUrl', serverUrl.value) }
+
+// Auth session kept in memory only (tokens expire; not persisted to localStorage)
+const authStep = ref<'credentials' | 'characters' | 'done'>('credentials')
 const authAction = ref<'login' | 'register'>('login')
 const authUsername = ref('')
 const authPassword = ref('')
 const authLoading = ref(false)
 const authError = ref('')
-const authSession = ref('')      // opaque JSON blob from backend
+const authSession = ref('')           // opaque LoginResponse JSON from backend
 const authChars = ref<CharDto[]>([])
+const activeChar = ref<CharDto | null>(null)   // chosen character for this session
 
-function openAuthModal() {
-  authModal.value = true
+function resetAuth() {
   authStep.value = 'credentials'
   authAction.value = 'login'
   authUsername.value = ''
@@ -88,15 +80,15 @@ function openAuthModal() {
   authError.value = ''
   authSession.value = ''
   authChars.value = []
+  activeChar.value = null
 }
 
 async function submitCredentials() {
-  if (!selectedPath.value || !selectedId.value) return
   authLoading.value = true
   authError.value = ''
   try {
     const result = await invoke<{ characters: CharDto[]; session_json: string }>('authenticate', {
-      server: selectedServerUrl.value,
+      server: serverUrl.value,
       username: authUsername.value,
       password: authPassword.value,
       action: authAction.value,
@@ -104,11 +96,10 @@ async function submitCredentials() {
     authSession.value = result.session_json
     authChars.value = result.characters
     if (result.characters.length === 1) {
-      // Auto-select the only character
-      await finishAuth(result.characters[0].id)
+      selectChar(result.characters[0])
     } else if (result.characters.length === 0) {
-      // Prompt to create first character
-      await finishAuth(0)
+      // No characters yet — go straight to character creation
+      await createAndSelectChar()
     } else {
       authStep.value = 'characters'
     }
@@ -119,25 +110,15 @@ async function submitCredentials() {
   }
 }
 
-async function finishAuth(charId: number) {
-  if (!selectedPath.value || !selectedId.value) return
-  authLoading.value = true
-  authError.value = ''
-  try {
-    await invoke('select_character', {
-      gamePath: selectedPath.value,
-      server: selectedServerUrl.value,
-      sessionJson: authSession.value,
-      charId,
-      version: selectedId.value.toUpperCase(),
-    })
-    authModal.value = false
-    showToast('Authenticated — config.json saved')
-  } catch (e: any) {
-    authError.value = e
-  } finally {
-    authLoading.value = false
-  }
+function createAndSelectChar() {
+  // char_id = 0 is the sentinel for "create a new character at launch time"
+  selectChar({ id: 0, name: 'New character', hr: 0, gr: 0, is_female: false })
+}
+
+function selectChar(char: CharDto) {
+  activeChar.value = char
+  authStep.value = 'done'
+  showToast(`Ready — playing as ${char.name}`)
 }
 
 // Toast / status message
@@ -153,6 +134,7 @@ const selected = computed(() => versions.value.find(v => v.id === selectedId.val
 const selectedPath = computed(() => selectedId.value ? (installedPaths.value[selectedId.value] ?? '') : '')
 const isInstalled = computed(() => !!selectedPath.value)
 const isDownloading = computed(() => selectedId.value ? !!downloading.value[selectedId.value] : false)
+const isAuthenticated = computed(() => authStep.value === 'done' && !!activeChar.value)
 
 // ── Lifecycle ────────────────────────────────────────────────────────────────
 
@@ -200,10 +182,23 @@ async function startDownload() {
   }
 }
 
-async function launchGame(auth = false) {
-  if (!selectedPath.value) return
+async function launchGame() {
+  if (!selectedPath.value || !selectedId.value) return
+
+  if (!isAuthenticated.value || !activeChar.value || !authSession.value) {
+    showToast('Not authenticated — go to the Server tab first', 'err')
+    view.value = 'server'
+    return
+  }
+
   try {
-    await invoke('launch_game', { path: selectedPath.value, auth })
+    await invoke('launch_game_authed', {
+      path: selectedPath.value,
+      version: selectedId.value.toUpperCase(),
+      server: serverUrl.value,
+      sessionJson: authSession.value,
+      charId: activeChar.value.id,
+    })
   } catch (e: any) {
     showToast(e, 'err')
   }
@@ -254,8 +249,12 @@ async function runChecks() {
         <button :class="['nav-tab', view === 'library' ? 'active' : '']" @click="view = 'library'">
           Library
         </button>
+        <button :class="['nav-tab', view === 'server' ? 'active' : '']" @click="view = 'server'">
+          Server
+          <span class="auth-dot" :class="isAuthenticated ? 'ok' : 'off'"></span>
+        </button>
         <button :class="['nav-tab', view === 'checks' ? 'active' : '']" @click="view = 'checks'; runChecks()">
-          System Check
+          Checks
         </button>
       </nav>
 
@@ -321,17 +320,26 @@ async function runChecks() {
           </div>
         </div>
 
-        <!-- Server URL (shown when a path is set) -->
-        <div class="section" v-if="selectedPath">
-          <label class="section-label">Server URL</label>
-          <input class="path-input" v-model="selectedServerUrl" placeholder="http://127.0.0.1:8080" />
+        <!-- Auth status banner (when installed) -->
+        <div class="auth-banner" v-if="isInstalled">
+          <template v-if="isAuthenticated">
+            <span class="auth-banner-ok">&#10003; Authenticated as <strong>{{ authUsername }}</strong> — <strong>{{ activeChar!.name }}</strong></span>
+            <button class="btn-link" @click="view = 'server'">Change…</button>
+          </template>
+          <template v-else>
+            <span class="auth-banner-warn">&#9888; Not authenticated</span>
+            <button class="btn-link" @click="view = 'server'">Authenticate →</button>
+          </template>
         </div>
 
         <!-- Action buttons -->
         <div class="actions">
           <template v-if="isInstalled">
-            <button class="btn-primary" @click="launchGame(false)">&#x25B6;  Play</button>
-            <button class="btn-secondary" @click="openAuthModal">Authenticate</button>
+            <button
+              class="btn-primary"
+              :disabled="isDownloading"
+              @click="launchGame"
+            >&#x25B6;  Play</button>
             <button class="btn-outline" @click="fetchLauncher">Update launcher</button>
             <button class="btn-outline" @click="runAvExclude">AV Exclude (Windows)</button>
           </template>
@@ -347,10 +355,91 @@ async function runChecks() {
           </template>
         </div>
 
-        <!-- If already has path but not fully installed, show fetch launcher tip -->
+        <!-- Tip -->
         <div class="info-box" v-if="!isInstalled && selectedPath">
           <strong>Tip:</strong> If you already have the game files at the chosen path,
           use <em>Get launcher only</em> to download mhf-iel and start playing.
+        </div>
+      </div>
+
+      <!-- Server view -->
+      <div class="server-pane" v-if="view === 'server'">
+        <h1 class="server-title">Server</h1>
+
+        <!-- Server URL — always visible, independent of game version -->
+        <div class="section">
+          <label class="section-label">Server URL</label>
+          <input
+            class="path-input"
+            v-model="serverUrl"
+            placeholder="http://127.0.0.1:8080"
+            @change="saveServerUrl(); resetAuth()"
+          />
+          <p class="field-hint">Changing the URL will require you to re-authenticate.</p>
+        </div>
+
+        <!-- Logged-in state -->
+        <div v-if="authStep === 'done' && activeChar" class="session-card">
+          <div class="session-info">
+            <span class="session-label">Logged in as</span>
+            <span class="session-value">{{ authUsername }}</span>
+          </div>
+          <div class="session-info">
+            <span class="session-label">Character</span>
+            <span class="session-value char-name-ok">{{ activeChar.name }}
+              <span class="char-hr">HR {{ activeChar.hr }} / GR {{ activeChar.gr }}</span>
+            </span>
+          </div>
+          <div class="session-actions">
+            <button class="btn-secondary" @click="authStep = 'characters'">Switch character</button>
+            <button class="btn-outline" @click="resetAuth">Log out</button>
+          </div>
+        </div>
+
+        <!-- Character picker (after login, multiple chars) -->
+        <div v-else-if="authStep === 'characters'" class="section">
+          <label class="section-label">Choose character</label>
+          <div class="char-list">
+            <button
+              v-for="c in authChars"
+              :key="c.id"
+              class="char-card"
+              :disabled="authLoading"
+              @click="selectChar(c)"
+            >
+              <span class="char-name">{{ c.name }}</span>
+              <span class="char-meta">HR {{ c.hr }} / GR {{ c.gr }}</span>
+            </button>
+            <button class="char-card new-char" :disabled="authLoading" @click="createAndSelectChar">
+              + New character
+            </button>
+          </div>
+          <div class="auth-error" v-if="authError">{{ authError }}</div>
+        </div>
+
+        <!-- Login / register form -->
+        <div v-else class="section">
+          <div class="field-row">
+            <button :class="['tab-btn', authAction === 'login' ? 'active' : '']" @click="authAction = 'login'">Login</button>
+            <button :class="['tab-btn', authAction === 'register' ? 'active' : '']" @click="authAction = 'register'">Register</button>
+          </div>
+          <div class="field">
+            <label>Username</label>
+            <input v-model="authUsername" type="text" placeholder="your username" autocomplete="username" @keyup.enter="submitCredentials" />
+          </div>
+          <div class="field">
+            <label>Password</label>
+            <input v-model="authPassword" type="password" placeholder="••••••••" autocomplete="current-password" @keyup.enter="submitCredentials" />
+          </div>
+          <div class="auth-error" v-if="authError">{{ authError }}</div>
+          <button
+            class="btn-primary"
+            style="align-self: flex-start"
+            :disabled="authLoading || !authUsername || !authPassword"
+            @click="submitCredentials"
+          >
+            {{ authLoading ? 'Connecting…' : authAction === 'login' ? 'Login' : 'Register' }}
+          </button>
         </div>
       </div>
 
@@ -393,59 +482,6 @@ async function runChecks() {
       </div>
 
     </main>
-
-    <!-- Auth modal -->
-    <div class="modal-backdrop" v-if="authModal" @click.self="authModal = false">
-      <div class="modal">
-        <div class="modal-header">
-          <span>{{ authStep === 'credentials' ? 'Authenticate' : 'Select character' }}</span>
-          <button class="modal-close" @click="authModal = false">&#x2715;</button>
-        </div>
-
-        <!-- Step 1: credentials -->
-        <div v-if="authStep === 'credentials'" class="modal-body">
-          <div class="field-row">
-            <button :class="['tab-btn', authAction === 'login' ? 'active' : '']" @click="authAction = 'login'">Login</button>
-            <button :class="['tab-btn', authAction === 'register' ? 'active' : '']" @click="authAction = 'register'">Register</button>
-          </div>
-          <div class="field">
-            <label>Username</label>
-            <input v-model="authUsername" type="text" placeholder="your username" autocomplete="username" @keyup.enter="submitCredentials" />
-          </div>
-          <div class="field">
-            <label>Password</label>
-            <input v-model="authPassword" type="password" placeholder="••••••••" autocomplete="current-password" @keyup.enter="submitCredentials" />
-          </div>
-          <div class="auth-error" v-if="authError">{{ authError }}</div>
-          <div class="modal-actions">
-            <button class="btn-primary" :disabled="authLoading || !authUsername || !authPassword" @click="submitCredentials">
-              {{ authLoading ? 'Connecting…' : authAction === 'login' ? 'Login' : 'Register' }}
-            </button>
-          </div>
-        </div>
-
-        <!-- Step 2: character selection -->
-        <div v-if="authStep === 'characters'" class="modal-body">
-          <p class="char-hint">Choose a character to play as:</p>
-          <div class="char-list">
-            <button
-              v-for="c in authChars"
-              :key="c.id"
-              class="char-card"
-              :disabled="authLoading"
-              @click="finishAuth(c.id)"
-            >
-              <span class="char-name">{{ c.name }}</span>
-              <span class="char-meta">HR {{ c.hr }} / GR {{ c.gr }}</span>
-            </button>
-            <button class="char-card new-char" :disabled="authLoading" @click="finishAuth(0)">
-              + New character
-            </button>
-          </div>
-          <div class="auth-error" v-if="authError">{{ authError }}</div>
-        </div>
-      </div>
-    </div>
 
     <!-- Toast -->
     <div :class="['toast', toast?.type]" v-if="toast">{{ toast.text }}</div>
@@ -498,6 +534,7 @@ async function runChecks() {
   letter-spacing: .03em;
   text-transform: uppercase;
   transition: color .15s, background .15s;
+  position: relative;
 }
 
 .nav-tab.active, .nav-tab:hover {
@@ -508,6 +545,19 @@ async function runChecks() {
 .nav-tab.active {
   border-bottom: 2px solid var(--accent);
 }
+
+/* Small status dot on the Server tab */
+.auth-dot {
+  display: inline-block;
+  width: 6px; height: 6px;
+  border-radius: 50%;
+  margin-left: 4px;
+  vertical-align: middle;
+  position: relative;
+  top: -1px;
+}
+.auth-dot.ok  { background: var(--ok); }
+.auth-dot.off { background: var(--text-dim); }
 
 .version-list {
   flex: 1;
@@ -671,6 +721,31 @@ async function runChecks() {
   transition: width .4s;
 }
 
+/* Auth banner in Library view */
+.auth-banner {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 10px 14px;
+  font-size: 13px;
+}
+.auth-banner-ok  { color: var(--ok); flex: 1; }
+.auth-banner-warn { color: var(--warn); flex: 1; }
+
+.btn-link {
+  background: none;
+  color: var(--accent);
+  font-size: 12px;
+  font-weight: 600;
+  padding: 0;
+  cursor: pointer;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
 .actions {
   display: flex;
   flex-wrap: wrap;
@@ -723,6 +798,90 @@ async function runChecks() {
   color: var(--text-dim);
   line-height: 1.6;
 }
+
+/* ── Server pane ── */
+.server-pane {
+  padding: 32px 40px;
+  max-width: 560px;
+  display: flex;
+  flex-direction: column;
+  gap: 28px;
+}
+
+.server-title {
+  font-size: 28px;
+  font-weight: 700;
+  color: var(--text);
+}
+
+.field-hint {
+  font-size: 12px;
+  color: var(--text-dim);
+  margin: 0;
+}
+
+/* Session card (logged-in state) */
+.session-card {
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-left: 3px solid var(--ok);
+  border-radius: 8px;
+  padding: 16px 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.session-info { display: flex; flex-direction: column; gap: 2px; }
+.session-label { font-size: 11px; text-transform: uppercase; letter-spacing: .05em; color: var(--text-dim); font-weight: 700; }
+.session-value { font-size: 14px; color: var(--text); font-weight: 600; }
+.char-name-ok { color: var(--ok); }
+.char-hr { font-size: 12px; color: var(--text-dim); font-weight: 400; margin-left: 8px; }
+
+.session-actions { display: flex; gap: 8px; margin-top: 4px; }
+
+/* Auth form fields */
+.field-row { display: flex; gap: 6px; }
+
+.tab-btn {
+  flex: 1; padding: 7px 0;
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: 5px;
+  color: var(--text-dim);
+  font-weight: 600; font-size: 13px;
+  cursor: pointer; transition: all .12s;
+}
+.tab-btn.active { border-color: var(--accent); color: var(--accent); background: rgba(201,168,76,.08); }
+.tab-btn:hover:not(.active) { color: var(--text); }
+
+.field { display: flex; flex-direction: column; gap: 5px; }
+.field label { font-size: 11px; font-weight: 700; letter-spacing: .05em; text-transform: uppercase; color: var(--text-dim); }
+.field input {
+  background: var(--bg-card); border: 1px solid var(--border);
+  border-radius: 5px; color: var(--text);
+  padding: 8px 10px; outline: none;
+}
+.field input:focus { border-color: var(--accent); }
+
+.auth-error { font-size: 12px; color: var(--err); background: rgba(207,79,79,.1); border: 1px solid var(--err); border-radius: 5px; padding: 8px 10px; }
+
+/* Character list (in Server tab) */
+.char-list { display: flex; flex-direction: column; gap: 6px; }
+
+.char-card {
+  display: flex; align-items: center; justify-content: space-between;
+  background: var(--bg-card); border: 1px solid var(--border);
+  border-radius: 6px; padding: 10px 14px;
+  cursor: pointer; text-align: left; width: 100%;
+  transition: border-color .12s, background .12s;
+}
+.char-card:hover:not(:disabled) { border-color: var(--accent); background: var(--bg-hover); }
+.char-card:disabled { opacity: .5; cursor: not-allowed; }
+.char-card.new-char { color: var(--accent); border-style: dashed; justify-content: center; font-weight: 600; }
+
+.char-name { font-weight: 600; font-size: 13px; }
+.char-meta { font-size: 11px; color: var(--text-dim); }
 
 /* ── Checks pane ── */
 .checks-pane {
@@ -808,84 +967,4 @@ async function runChecks() {
 .toast.err { border-color: var(--err); color: var(--err); }
 
 @keyframes fadein { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
-
-/* ── Auth modal ── */
-.modal-backdrop {
-  position: fixed; inset: 0;
-  background: rgba(0,0,0,.6);
-  display: flex; align-items: center; justify-content: center;
-  z-index: 200;
-}
-
-.modal {
-  background: var(--bg-panel);
-  border: 1px solid var(--border);
-  border-radius: 10px;
-  width: 380px;
-  box-shadow: 0 8px 40px rgba(0,0,0,.5);
-  animation: fadein .15s ease;
-}
-
-.modal-header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 16px 20px;
-  border-bottom: 1px solid var(--border);
-  font-weight: 700;
-  font-size: 15px;
-}
-
-.modal-close {
-  background: none; color: var(--text-dim); font-size: 16px;
-  cursor: pointer; transition: color .12s;
-}
-.modal-close:hover { color: var(--text); }
-
-.modal-body { padding: 20px; display: flex; flex-direction: column; gap: 14px; }
-
-.field-row { display: flex; gap: 6px; }
-
-.tab-btn {
-  flex: 1; padding: 7px 0;
-  background: var(--bg-card);
-  border: 1px solid var(--border);
-  border-radius: 5px;
-  color: var(--text-dim);
-  font-weight: 600; font-size: 13px;
-  cursor: pointer; transition: all .12s;
-}
-.tab-btn.active { border-color: var(--accent); color: var(--accent); background: rgba(201,168,76,.08); }
-.tab-btn:hover:not(.active) { color: var(--text); }
-
-.field { display: flex; flex-direction: column; gap: 5px; }
-.field label { font-size: 11px; font-weight: 700; letter-spacing: .05em; text-transform: uppercase; color: var(--text-dim); }
-.field input {
-  background: var(--bg-card); border: 1px solid var(--border);
-  border-radius: 5px; color: var(--text);
-  padding: 8px 10px; outline: none;
-}
-.field input:focus { border-color: var(--accent); }
-
-.auth-error { font-size: 12px; color: var(--err); background: rgba(207,79,79,.1); border: 1px solid var(--err); border-radius: 5px; padding: 8px 10px; }
-
-.modal-actions { display: flex; justify-content: flex-end; padding-top: 4px; }
-
-.char-hint { font-size: 13px; color: var(--text-dim); }
-
-.char-list { display: flex; flex-direction: column; gap: 6px; }
-
-.char-card {
-  display: flex; align-items: center; justify-content: space-between;
-  background: var(--bg-card); border: 1px solid var(--border);
-  border-radius: 6px; padding: 10px 14px;
-  cursor: pointer; text-align: left; width: 100%;
-  transition: border-color .12s, background .12s;
-}
-.char-card:hover:not(:disabled) { border-color: var(--accent); background: var(--bg-hover); }
-.char-card:disabled { opacity: .5; cursor: not-allowed; }
-.char-card.new-char { color: var(--accent); border-style: dashed; justify-content: center; font-weight: 600; }
-
-.char-name { font-weight: 600; font-size: 13px; }
-.char-meta { font-size: 11px; color: var(--text-dim); }
 </style>
