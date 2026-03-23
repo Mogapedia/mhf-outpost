@@ -2,6 +2,7 @@ mod check;
 mod download;
 mod launcher;
 mod manifest;
+mod translate;
 mod verify;
 
 use anyhow::{bail, Result};
@@ -132,6 +133,42 @@ enum Command {
         strict: bool,
     },
 
+    /// Fetch server info from an Erupe instance and check version compatibility.
+    ///
+    /// Calls GET /v2/server/info and reports the server's configured client mode.
+    /// Pass --version to check whether your local game files match the server.
+    ServerInfo {
+        /// Erupe server base URL (e.g. http://localhost:8080).
+        #[arg(short, long)]
+        server: String,
+
+        /// Your local game version manifest ID (e.g. zz, gg) for compatibility check.
+        #[arg(short, long, value_name = "VERSION")]
+        version: Option<String>,
+    },
+
+    /// Apply fan translations from a GitHub release to the game directory.
+    ///
+    /// Downloads pre-built translated .bin files from the latest release of
+    /// the specified GitHub repository and writes them into the game directory,
+    /// replacing the stock Japanese files.
+    ///
+    /// The release must contain assets named `<lang>-<file>.bin`
+    /// (e.g. `fr-mhfdat.bin`, `fr-mhfpac.bin`).
+    Translate {
+        /// Game directory to apply translations into.
+        #[arg(short, long)]
+        path: PathBuf,
+
+        /// Language code to fetch (e.g. fr, en).
+        #[arg(short, long, default_value = "fr")]
+        lang: String,
+
+        /// GitHub repository (owner/repo) hosting the translation releases.
+        #[arg(short, long, default_value = translate::DEFAULT_REPO)]
+        repo: String,
+    },
+
     /// Compute the SHA-256 and SHA-1 of a single file.
     Hash { path: PathBuf },
 
@@ -182,6 +219,14 @@ fn main() -> Result<()> {
             verbose,
             strict,
         ),
+        Command::ServerInfo { server, version } => {
+            translate::server_info(&server, version.as_deref())
+        }
+        Command::Translate { path, lang, repo } => translate::run(translate::TranslateOptions {
+            dest: path,
+            lang,
+            repo,
+        }),
         Command::Hash { path } => cmd_hash(&path),
         Command::HashDir {
             path,
