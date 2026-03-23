@@ -3,6 +3,9 @@ use indicatif::{ProgressBar, ProgressStyle};
 use serde::Deserialize;
 use std::io::Write;
 use std::path::Path;
+use std::time::Duration;
+
+const REQUEST_TIMEOUT: Duration = Duration::from_secs(30);
 
 /// We maintain mhf-iel-cli ourselves; only the CLI launcher binary is needed.
 /// Authentication (previously mhf-iel-auth) is now built into mhf-outpost.
@@ -27,6 +30,7 @@ struct Asset {
 pub fn fetch_launcher(dest: &Path) -> Result<()> {
     let client = reqwest::blocking::Client::builder()
         .user_agent("mhf-outpost/0.1")
+        .timeout(REQUEST_TIMEOUT)
         .build()?;
 
     println!("Fetching latest mhf-iel release from GitHub…");

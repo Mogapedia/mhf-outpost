@@ -1,6 +1,9 @@
 use anyhow::{bail, Context, Result};
 use serde::{Deserialize, Serialize};
 use std::path::Path;
+use std::time::Duration;
+
+const REQUEST_TIMEOUT: Duration = Duration::from_secs(30);
 
 // ── Server API types ──────────────────────────────────────────────────────────
 
@@ -118,6 +121,7 @@ pub fn authenticate(
 ) -> Result<LoginResponse> {
     let client = reqwest::blocking::Client::builder()
         .user_agent("mhf-outpost/0.1")
+        .timeout(REQUEST_TIMEOUT)
         .build()?;
     let url = format!("{}/v2/{}", server.trim_end_matches('/'), action);
 
@@ -147,6 +151,7 @@ pub fn authenticate(
 pub fn create_character(server: &str, token: &str) -> Result<Character> {
     let client = reqwest::blocking::Client::builder()
         .user_agent("mhf-outpost/0.1")
+        .timeout(REQUEST_TIMEOUT)
         .build()?;
     let url = format!("{}/v2/characters", server.trim_end_matches('/'));
 

@@ -5,8 +5,10 @@ use indicatif::{ProgressBar, ProgressStyle};
 use std::fs::{File, OpenOptions};
 use std::io::{Read, Write};
 use std::path::{Component, Path, PathBuf};
+use std::time::Duration;
 
 const CHUNK: usize = 64 * 1024; // 64 KiB
+const CONNECT_TIMEOUT: Duration = Duration::from_secs(30);
 
 // ── Public entry point ────────────────────────────────────────────────────────
 
@@ -123,6 +125,7 @@ fn download_file(archive: &ArchiveSource, dest: &Path) -> Result<()> {
 
     let client = reqwest::blocking::Client::builder()
         .user_agent("mhf-outpost/0.1")
+        .connect_timeout(CONNECT_TIMEOUT)
         .build()?;
 
     let mut req = client.get(archive.download_url());
