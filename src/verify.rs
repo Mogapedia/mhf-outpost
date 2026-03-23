@@ -28,7 +28,6 @@ pub fn hash_file_sha1(path: &Path) -> Result<String, std::io::Error> {
 }
 
 pub struct ArchiveCheckResult {
-    pub path: PathBuf,
     pub expected_sha1: String,
     pub actual_sha1: String,
     pub expected_size: u64,
@@ -54,7 +53,6 @@ pub fn verify_archive(archive: &ArchiveSource, path: &Path) -> Result<ArchiveChe
     pb.finish_and_clear();
 
     Ok(ArchiveCheckResult {
-        path: path.to_path_buf(),
         expected_sha1: archive.sha1.clone(),
         actual_sha1,
         expected_size: archive.size,
@@ -86,9 +84,15 @@ pub use hash_file_sha256 as hash_file;
 pub enum FileStatus {
     Ok,
     Missing,
-    SizeMismatch { expected: u64, actual: u64 },
+    SizeMismatch {
+        expected: u64,
+        actual: u64,
+    },
     /// File hash differs from manifest. Interpretation depends on `FileResult::kind`.
-    Modified { expected: String, actual: String },
+    Modified {
+        expected: String,
+        actual: String,
+    },
     Placeholder,
     Unreadable(String),
 }
@@ -134,9 +138,9 @@ impl VerifyReport {
     }
 
     pub fn modified(&self) -> impl Iterator<Item = &FileResult> {
-        self.results.iter().filter(|r| {
-            matches!(r.status, FileStatus::Modified { .. }) && r.kind != FileKind::Core
-        })
+        self.results
+            .iter()
+            .filter(|r| matches!(r.status, FileStatus::Modified { .. }) && r.kind != FileKind::Core)
     }
 
     pub fn ok_count(&self) -> usize {
@@ -187,11 +191,9 @@ pub fn verify(manifest: &Manifest, root: &Path) -> VerifyReport {
     let total = manifest.files.len() as u64;
     let pb = ProgressBar::new(total);
     pb.set_style(
-        ProgressStyle::with_template(
-            "{spinner:.cyan} [{bar:40.cyan/blue}] {pos}/{len} {wide_msg}",
-        )
-        .unwrap()
-        .progress_chars("=>-"),
+        ProgressStyle::with_template("{spinner:.cyan} [{bar:40.cyan/blue}] {pos}/{len} {wide_msg}")
+            .unwrap()
+            .progress_chars("=>-"),
     );
 
     let results: Vec<FileResult> = manifest

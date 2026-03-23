@@ -6,9 +6,9 @@ mod verify;
 
 use anyhow::{bail, Result};
 use clap::{Parser, Subcommand};
+use manifest::FileKind;
 use manifest::Manifest;
 use std::path::{Path, PathBuf};
-use manifest::FileKind;
 use verify::{FileStatus, VerifyReport};
 
 #[derive(Parser)]
@@ -133,9 +133,7 @@ enum Command {
     },
 
     /// Compute the SHA-256 and SHA-1 of a single file.
-    Hash {
-        path: PathBuf,
-    },
+    Hash { path: PathBuf },
 
     /// Walk a directory and print manifest [[files]] entries for all files.
     ///
@@ -161,17 +159,35 @@ fn main() -> Result<()> {
         Command::FetchLauncher { path } => launcher::fetch_launcher(&path),
         Command::Launch { path, auth } => launcher::launch(&path, auth),
         Command::AvExclude { path } => launcher::av_exclude(&path),
-        Command::Download { version, path, archive, yes, keep_archive } => {
-            cmd_download(&version, path, archive, yes, keep_archive)
-        }
+        Command::Download {
+            version,
+            path,
+            archive,
+            yes,
+            keep_archive,
+        } => cmd_download(&version, path, archive, yes, keep_archive),
         Command::List => cmd_list(),
         Command::Info { version } => cmd_info(&version),
         Command::VerifyArchive { path, version } => cmd_verify_archive(&path, &version),
-        Command::Verify { version, path, manifest, verbose, strict } => {
-            cmd_verify(&version, path.as_deref(), manifest.as_deref(), verbose, strict)
-        }
+        Command::Verify {
+            version,
+            path,
+            manifest,
+            verbose,
+            strict,
+        } => cmd_verify(
+            &version,
+            path.as_deref(),
+            manifest.as_deref(),
+            verbose,
+            strict,
+        ),
         Command::Hash { path } => cmd_hash(&path),
-        Command::HashDir { path, exclude, toml } => cmd_hash_dir(&path, &exclude, toml),
+        Command::HashDir {
+            path,
+            exclude,
+            toml,
+        } => cmd_hash_dir(&path, &exclude, toml),
     }
 }
 
@@ -193,9 +209,9 @@ fn cmd_check(game_path: Option<&Path>) -> Result<()> {
 
     for c in &all {
         let (icon, label) = match c.status {
-            check::Status::Ok      => ("✓", "OK     "),
+            check::Status::Ok => ("✓", "OK     "),
             check::Status::Warning => ("⚠", "WARN   "),
-            check::Status::Error   => ("✗", "ERROR  "),
+            check::Status::Error => ("✗", "ERROR  "),
         };
         println!("  {icon} {label} {}: {}", c.name, c.detail);
         if let Some(fix) = &c.fix {
@@ -206,7 +222,7 @@ fn cmd_check(game_path: Option<&Path>) -> Result<()> {
         }
         match c.status {
             check::Status::Warning => warnings += 1,
-            check::Status::Error   => errors += 1,
+            check::Status::Error => errors += 1,
             _ => {}
         }
     }
@@ -217,7 +233,9 @@ fn cmd_check(game_path: Option<&Path>) -> Result<()> {
         Ok(())
     } else {
         if errors > 0 {
-            bail!("{errors} error(s), {warnings} warning(s) — fix the errors above before launching");
+            bail!(
+                "{errors} error(s), {warnings} warning(s) — fix the errors above before launching"
+            );
         } else {
             println!("{warnings} warning(s) — review the recommendations above");
             Ok(())
@@ -238,7 +256,10 @@ fn cmd_download(
 
     // Run system + extractor checks upfront; warn but don't block.
     let sys = check::system_checks();
-    let errors: Vec<_> = sys.iter().filter(|c| c.status == check::Status::Error).collect();
+    let errors: Vec<_> = sys
+        .iter()
+        .filter(|c| c.status == check::Status::Error)
+        .collect();
     if !errors.is_empty() {
         println!("⚠  System issues detected (run `mhf-outpost check` for details):");
         for e in &errors {
@@ -249,7 +270,10 @@ fn cmd_download(
 
     if let Some(archive_src) = &manifest.archive {
         let ext_checks = check::extractor_checks(&archive_src.format);
-        let ext_errors: Vec<_> = ext_checks.iter().filter(|c| c.status == check::Status::Error).collect();
+        let ext_errors: Vec<_> = ext_checks
+            .iter()
+            .filter(|c| c.status == check::Status::Error)
+            .collect();
         if !ext_errors.is_empty() {
             for e in &ext_errors {
                 println!("✗ {}: {}", e.name, e.detail);
@@ -263,13 +287,16 @@ fn cmd_download(
         }
     }
 
-    let dest = path.unwrap_or_else(|| {
-        PathBuf::from(manifest.version.id.to_ascii_lowercase())
-    });
+    let dest = path.unwrap_or_else(|| PathBuf::from(manifest.version.id.to_ascii_lowercase()));
 
     download::run(
         &manifest,
-        download::DownloadOptions { dest, archive_path: archive, yes, keep_archive },
+        download::DownloadOptions {
+            dest,
+            archive_path: archive,
+            yes,
+            keep_archive,
+        },
     )
 }
 
@@ -278,8 +305,8 @@ fn cmd_download(
 fn cmd_list() -> Result<()> {
     let manifests = Manifest::all();
     println!(
-        "{:<6} {:<12} {:<8} {:<8} {}",
-        "ID", "Name", "Platform", "Archive", "Description"
+        "{:<6} {:<12} {:<8} {:<8} Description",
+        "ID", "Name", "Platform", "Archive"
     );
     println!("{}", "-".repeat(80));
     for m in &manifests {
@@ -292,11 +319,7 @@ fn cmd_list() -> Result<()> {
         } else {
             let r = m.recorded_count();
             let t = m.files.len();
-            if r == t {
-                format!("  [{}/{} files hashed]", r, t)
-            } else {
-                format!("  [{}/{} files hashed]", r, t)
-            }
+            format!("  [{}/{} files hashed]", r, t)
         };
         println!(
             "{:<6} {:<12} {:<8} {:<8} {}{}",
@@ -473,14 +496,20 @@ fn print_report(report: &VerifyReport, verbose: bool) {
             FileStatus::Modified { expected, actual } => {
                 match r.kind {
                     FileKind::Core => {
-                        println!("  TAMPERED       {}  [core file — unexpected modification]", r.path);
+                        println!(
+                            "  TAMPERED       {}  [core file — unexpected modification]",
+                            r.path
+                        );
                         println!("    expected: {}", expected);
                         println!("    actual:   {}", actual);
                     }
                     FileKind::Url => {
                         // Expected — user pointed the client at a community server.
                         if verbose {
-                            println!("  URL PATCHED    {}  [server URL customization — OK]", r.path);
+                            println!(
+                                "  URL PATCHED    {}  [server URL customization — OK]",
+                                r.path
+                            );
                         }
                     }
                     FileKind::Translation => {

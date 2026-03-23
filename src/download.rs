@@ -166,8 +166,7 @@ fn download_file(archive: &ArchiveSource, dest: &Path) -> Result<()> {
             .open(dest)
             .with_context(|| format!("cannot open '{}'", dest.display()))?
     } else {
-        File::create(dest)
-            .with_context(|| format!("cannot create '{}'", dest.display()))?
+        File::create(dest).with_context(|| format!("cannot create '{}'", dest.display()))?
     };
 
     let mut buf = vec![0u8; CHUNK];
@@ -190,15 +189,14 @@ fn extract(archive: &ArchiveSource, src: &Path, dest: &Path) -> Result<usize> {
     match archive.format.as_str() {
         "ZIP" => extract_zip(src, dest),
         "RAR" => extract_with_tool(src, dest, &["unrar", "x", "-o+"], "unrar"),
-        "7z"  => extract_7z(src, dest),
-        fmt   => bail!("unsupported archive format '{fmt}' — extract manually"),
+        "7z" => extract_7z(src, dest),
+        fmt => bail!("unsupported archive format '{fmt}' — extract manually"),
     }
 }
 
 /// ZIP extraction via the `zip` crate (pure Rust, no system tool needed).
 fn extract_zip(src: &Path, dest: &Path) -> Result<usize> {
-    let file = File::open(src)
-        .with_context(|| format!("cannot open '{}'", src.display()))?;
+    let file = File::open(src).with_context(|| format!("cannot open '{}'", src.display()))?;
     let mut archive = zip::ZipArchive::new(file)
         .with_context(|| format!("cannot read ZIP '{}'", src.display()))?;
 
@@ -244,8 +242,8 @@ fn extract_zip(src: &Path, dest: &Path) -> Result<usize> {
             if let Some(parent) = out.parent() {
                 std::fs::create_dir_all(parent)?;
             }
-            let mut f = File::create(&out)
-                .with_context(|| format!("cannot create '{}'", out.display()))?;
+            let mut f =
+                File::create(&out).with_context(|| format!("cannot create '{}'", out.display()))?;
             std::io::copy(&mut entry, &mut f)?;
             extracted += 1;
         }
@@ -299,13 +297,16 @@ fn maybe_extract_inner(outer_dest: &Path) -> Result<()> {
         .to_ascii_lowercase();
 
     let inner_format = match ext.as_str() {
-        "7z"  => "7z",
+        "7z" => "7z",
         "rar" => "RAR",
         "zip" => "ZIP",
-        _     => return Ok(()), // not a known archive, leave as-is
+        _ => return Ok(()), // not a known archive, leave as-is
     };
 
-    println!("Inner archive detected ({inner_format}): {}", inner_path.display());
+    println!(
+        "Inner archive detected ({inner_format}): {}",
+        inner_path.display()
+    );
     println!("Extracting inner archive…");
 
     let fake_src = crate::manifest::ArchiveSource {
@@ -389,63 +390,4 @@ fn safe_join(base: &Path, rel: &Path) -> Result<PathBuf> {
         }
     }
     Ok(out)
-}
-
-// ── GUI-friendly download helper ──────────────────────────────────────────────
-
-/// Download `archive` to `dest`, calling `on_progress(bytes_done, total_bytes)` each chunk.
-/// Used by the GUI to emit progress events without indicatif.
-pub fn download_file_with_progress<F>(
-    archive: &ArchiveSource,
-    dest: &std::path::Path,
-    on_progress: F,
-) -> Result<()>
-where
-    F: Fn(u64, u64),
-{
-    use std::io::Read;
-    let existing = dest.metadata().map(|m| m.len()).unwrap_or(0);
-    if existing == archive.size {
-        on_progress(archive.size, archive.size);
-        return Ok(());
-    }
-
-    let client = reqwest::blocking::Client::builder()
-        .user_agent("mhf-outpost/0.1")
-        .build()?;
-
-    let mut req = client.get(archive.download_url());
-    if existing > 0 {
-        req = req.header("Range", format!("bytes={existing}-"));
-    }
-
-    let mut resp = req
-        .send()
-        .with_context(|| format!("failed to connect to {}", archive.download_url()))?;
-
-    let status = resp.status();
-    if !status.is_success() {
-        bail!("server returned {status}");
-    }
-    let resumed = status == reqwest::StatusCode::PARTIAL_CONTENT;
-    let content_len = resp.content_length().unwrap_or(0);
-    let total = if resumed { existing + content_len } else { content_len.max(archive.size) };
-
-    let mut file = if resumed {
-        std::fs::OpenOptions::new().append(true).open(dest)
-            .with_context(|| format!("cannot open '{}'", dest.display()))?
-    } else {
-        File::create(dest).with_context(|| format!("cannot create '{}'", dest.display()))?
-    };
-
-    let mut done = existing;
-    let mut buf = vec![0u8; CHUNK];
-    loop {
-        let n = resp.read(&mut buf)?;
-        if n == 0 { break; }
-        file.write_all(&buf[..n])?;
-        done += n as u64;
-        on_progress(done, total);
-    }
-    Ok(())
 }

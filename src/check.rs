@@ -1,5 +1,4 @@
 use std::path::{Path, PathBuf};
-use serde_json;
 
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
 pub enum Status {
@@ -19,13 +18,28 @@ pub struct Check {
 
 impl Check {
     fn ok(name: &'static str, detail: impl Into<String>) -> Self {
-        Self { name, status: Status::Ok, detail: detail.into(), fix: None }
+        Self {
+            name,
+            status: Status::Ok,
+            detail: detail.into(),
+            fix: None,
+        }
     }
     fn warn(name: &'static str, detail: impl Into<String>, fix: impl Into<String>) -> Self {
-        Self { name, status: Status::Warning, detail: detail.into(), fix: Some(fix.into()) }
+        Self {
+            name,
+            status: Status::Warning,
+            detail: detail.into(),
+            fix: Some(fix.into()),
+        }
     }
     fn err(name: &'static str, detail: impl Into<String>, fix: impl Into<String>) -> Self {
-        Self { name, status: Status::Error, detail: detail.into(), fix: Some(fix.into()) }
+        Self {
+            name,
+            status: Status::Error,
+            detail: detail.into(),
+            fix: Some(fix.into()),
+        }
     }
 }
 
@@ -44,7 +58,10 @@ pub fn system_checks() -> Vec<Check> {
     #[cfg(not(any(target_os = "windows", target_os = "linux")))]
     checks.push(Check::warn(
         "Platform",
-        format!("Running on {}, only Windows and Linux are tested", std::env::consts::OS),
+        format!(
+            "Running on {}, only Windows and Linux are tested",
+            std::env::consts::OS
+        ),
         "Use Windows (native) or Linux (via Wine) for best compatibility",
     ));
 
@@ -78,7 +95,9 @@ pub fn extractor_checks(format: &str) -> Vec<Check> {
 }
 
 fn check_tool(name: &'static str, bin: &str, detail: &str, fix: &str) -> Check {
-    match std::process::Command::new(bin).arg("--version").output()
+    match std::process::Command::new(bin)
+        .arg("--version")
+        .output()
         .or_else(|_| std::process::Command::new(bin).output())
     {
         Ok(_) => Check::ok(name, detail),
@@ -152,7 +171,10 @@ pub fn game_dir_checks(path: &Path) -> Vec<Check> {
              Apply the community no-GG patch or replace GameGuard.des with the patched version",
         ));
     } else {
-        checks.push(Check::ok("GameGuard", "not present (patched or removed — OK)"));
+        checks.push(Check::ok(
+            "GameGuard",
+            "not present (patched or removed — OK)",
+        ));
     }
 
     // config.json (mhf-iel runtime config)
@@ -161,7 +183,11 @@ pub fn game_dir_checks(path: &Path) -> Vec<Check> {
         let token_ok = std::fs::read_to_string(&cfg)
             .ok()
             .and_then(|s| serde_json::from_str::<serde_json::Value>(&s).ok())
-            .and_then(|v| v.get("user_token").and_then(|t| t.as_str()).map(|t| t.len() == 16))
+            .and_then(|v| {
+                v.get("user_token")
+                    .and_then(|t| t.as_str())
+                    .map(|t| t.len() == 16)
+            })
             .unwrap_or(false);
         if token_ok {
             checks.push(Check::ok("config.json", "found, session token present"));
@@ -187,10 +213,7 @@ pub fn game_dir_checks(path: &Path) -> Vec<Check> {
 
 #[cfg(target_os = "windows")]
 fn windows_checks() -> Vec<Check> {
-    vec![
-        check_dx9_windows(),
-        check_japanese_fonts_windows(),
-    ]
+    vec![check_dx9_windows(), check_japanese_fonts_windows()]
 }
 
 #[cfg(target_os = "windows")]
@@ -223,11 +246,17 @@ fn check_japanese_fonts_windows() -> Check {
         .collect();
 
     if found.contains(&"msgothic.ttc") {
-        Check::ok("Japanese fonts", format!("MS Gothic found ({})", found.join(", ")))
+        Check::ok(
+            "Japanese fonts",
+            format!("MS Gothic found ({})", found.join(", ")),
+        )
     } else if !found.is_empty() {
         Check::warn(
             "Japanese fonts",
-            format!("Some CJK fonts present ({}) but MS Gothic (msgothic.ttc) is missing", found.join(", ")),
+            format!(
+                "Some CJK fonts present ({}) but MS Gothic (msgothic.ttc) is missing",
+                found.join(", ")
+            ),
             "Install the Japanese language pack:\
              \nSettings → Time & Language → Language & region → Add a language → 日本語\
              \nThen install the optional font package for that language",
@@ -247,11 +276,7 @@ fn check_japanese_fonts_windows() -> Check {
 
 #[cfg(target_os = "linux")]
 fn linux_checks() -> Vec<Check> {
-    vec![
-        check_wine(),
-        check_dxvk(),
-        check_japanese_fonts_linux(),
-    ]
+    vec![check_wine(), check_dxvk(), check_japanese_fonts_linux()]
 }
 
 #[cfg(target_os = "linux")]
@@ -296,7 +321,11 @@ fn check_dxvk() -> Check {
 
     if sys32_dll.exists() {
         // If the dll is a symlink to a .so it's almost certainly DXVK or WineD3D.
-        let source = if sys32_dll.is_symlink() { "symlink to .so" } else { "file" };
+        let source = if sys32_dll.is_symlink() {
+            "symlink to .so"
+        } else {
+            "file"
+        };
         Check::ok(
             "DXVK / d3d9",
             format!("d3d9.dll present in Wine prefix ({})", source),
@@ -316,7 +345,10 @@ fn check_dxvk() -> Check {
 #[cfg(target_os = "linux")]
 fn check_japanese_fonts_linux() -> Check {
     // fc-list :lang=ja returns one line per Japanese font face; empty = none installed.
-    match std::process::Command::new("fc-list").args([":lang=ja"]).output() {
+    match std::process::Command::new("fc-list")
+        .args([":lang=ja"])
+        .output()
+    {
         Ok(out) => {
             let stdout = String::from_utf8_lossy(&out.stdout);
             let count = stdout.lines().count();

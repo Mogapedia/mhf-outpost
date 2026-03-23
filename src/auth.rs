@@ -18,11 +18,13 @@ pub struct LoginResponse {
     pub expiry_ts: u32,
     #[serde(rename = "entranceCount")]
     pub entrance_count: u32,
-    pub notices: Vec<Notice>,
+    /// Plain-text notice strings shown in the launcher.
+    pub notices: Vec<String>,
     pub user: User,
     pub characters: Vec<Character>,
+    pub courses: Vec<CourseInfo>,
     #[serde(rename = "mezFes")]
-    pub mez_fes: MezFes,
+    pub mez_fes: Option<MezFes>,
     #[serde(rename = "patchServer")]
     pub patch_server: String,
 }
@@ -46,12 +48,14 @@ pub struct Character {
     pub gr: u32,
     #[serde(rename = "lastLogin")]
     pub last_login: i32,
+    /// True if the character has not logged in for 90+ days.
+    pub returning: bool,
 }
 
-#[derive(Debug, Deserialize, Serialize)]
-pub struct Notice {
-    pub flags: u16,
-    pub data: String,
+#[derive(Debug, Serialize, Deserialize)]
+pub struct CourseInfo {
+    pub id: u16,
+    pub name: String,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -63,44 +67,8 @@ pub struct MezFes {
     pub solo_tickets: u32,
     #[serde(rename = "groupTickets")]
     pub group_tickets: u32,
-    #[serde(deserialize_with = "deserialize_stalls")]
-    pub stalls: Vec<String>,
-}
-
-fn deserialize_stalls<'de, D>(deserializer: D) -> Result<Vec<String>, D::Error>
-where
-    D: serde::Deserializer<'de>,
-{
-    use serde::de::{Deserialize, Error};
-    let value = serde_json::Value::deserialize(deserializer)?;
-    match value {
-        serde_json::Value::Array(arr) => Ok(arr
-            .into_iter()
-            .filter_map(|v| match v {
-                serde_json::Value::String(s) => Some(s),
-                serde_json::Value::Number(n) => {
-                    Some(match n.as_u64().unwrap_or(0) as u32 {
-                        3  => "Pachinko",
-                        4  => "Nyanrendo",
-                        5  => "DokkanBattleCats",
-                        6  => "VolpakkunTogether",
-                        7  => "PointStall",
-                        8  => "HoneyPanic",
-                        9  => "GoocooScoop",
-                        10 => "TokotokoPartnya",
-                        _  => "StallMap",
-                    }.to_string())
-                }
-                _ => None,
-            })
-            .collect()),
-        _ => Err(D::Error::custom("expected array for stalls")),
-    }
-}
-
-#[derive(Debug, Serialize)]
-struct CreateCharRequest {
-    token: String,
+    /// Stall type IDs (3 = Pachinko, 4 = Nyanrendo, …).
+    pub stalls: Vec<u32>,
 }
 
 // ── config.json format (matches mhf-iel MhfConfig exactly) ──────────────────
@@ -125,38 +93,40 @@ pub struct GameConfig {
     pub entrance_count: u32,
     pub current_ts: u32,
     pub expiry_ts: u32,
-    pub notices: Vec<ConfigNotice>,
+    pub notices: Vec<String>,
     pub mez_event_id: u32,
     pub mez_start: u32,
     pub mez_end: u32,
     pub mez_solo_tickets: u32,
     pub mez_group_tickets: u32,
-    pub mez_stalls: Vec<String>, // e.g. "TokotokoPartnya"
-    pub version: String,         // "ZZ" | "F5"
+    pub mez_stalls: Vec<u32>,
+    pub version: String, // "ZZ" | "F5"
     pub mhf_folder: Option<String>,
     pub mhf_flags: Option<Vec<String>>,
 }
 
-#[derive(Debug, Serialize)]
-pub struct ConfigNotice {
-    pub flags: u16,
-    pub data: String,
-}
-
 // ── Public API ────────────────────────────────────────────────────────────────
 
-/// Authenticate with the Erupe server (login or register).
+/// Authenticate with the Erupe server (login or register) via the v2 API.
 /// Returns the full login response on success so the caller can handle
 /// character selection before writing config.json.
-pub fn authenticate(server: &str, action: &str, username: &str, password: &str) -> Result<LoginResponse> {
+pub fn authenticate(
+    server: &str,
+    action: &str,
+    username: &str,
+    password: &str,
+) -> Result<LoginResponse> {
     let client = reqwest::blocking::Client::builder()
         .user_agent("mhf-outpost/0.1")
         .build()?;
-    let url = format!("{}/{}", server.trim_end_matches('/'), action);
+    let url = format!("{}/v2/{}", server.trim_end_matches('/'), action);
 
     let resp = client
         .post(&url)
-        .json(&LoginRequest { username: username.to_string(), password: password.to_string() })
+        .json(&LoginRequest {
+            username: username.to_string(),
+            password: password.to_string(),
+        })
         .send()
         .with_context(|| format!("failed to connect to {url}"))?;
 
@@ -168,19 +138,21 @@ pub fn authenticate(server: &str, action: &str, username: &str, password: &str) 
         );
     }
 
-    resp.json::<LoginResponse>().context("failed to parse server response")
+    resp.json::<LoginResponse>()
+        .context("failed to parse server response")
 }
 
 /// Create a new character on the server and return it.
+/// Uses `POST /v2/characters` with a Bearer token.
 pub fn create_character(server: &str, token: &str) -> Result<Character> {
     let client = reqwest::blocking::Client::builder()
         .user_agent("mhf-outpost/0.1")
         .build()?;
-    let url = format!("{}/character/create", server.trim_end_matches('/'));
+    let url = format!("{}/v2/characters", server.trim_end_matches('/'));
 
     let resp = client
         .post(&url)
-        .json(&CreateCharRequest { token: token.to_string() })
+        .bearer_auth(token)
         .send()
         .context("failed to create character")?;
 
@@ -192,7 +164,8 @@ pub fn create_character(server: &str, token: &str) -> Result<Character> {
         );
     }
 
-    resp.json::<Character>().context("failed to parse character response")
+    resp.json::<Character>()
+        .context("failed to parse character response")
 }
 
 /// Build and write `config.json` into `game_dir`.
@@ -208,6 +181,7 @@ pub fn save_config(
     let server_host = url.host_str().context("no host in server URL")?.to_string();
 
     let char_ids: Vec<u32> = login.characters.iter().map(|c| c.id).collect();
+    let mez = login.mez_fes.as_ref();
 
     let config = GameConfig {
         char_id,
@@ -226,13 +200,13 @@ pub fn save_config(
         entrance_count: login.entrance_count,
         current_ts: login.current_ts,
         expiry_ts: login.expiry_ts,
-        notices: login.notices.iter().map(|n| ConfigNotice { flags: n.flags, data: n.data.clone() }).collect(),
-        mez_event_id: login.mez_fes.id,
-        mez_start: login.mez_fes.start,
-        mez_end: login.mez_fes.end,
-        mez_solo_tickets: login.mez_fes.solo_tickets,
-        mez_group_tickets: login.mez_fes.group_tickets,
-        mez_stalls: login.mez_fes.stalls.clone(),
+        notices: login.notices.clone(),
+        mez_event_id: mez.map_or(0, |m| m.id),
+        mez_start: mez.map_or(0, |m| m.start),
+        mez_end: mez.map_or(0, |m| m.end),
+        mez_solo_tickets: mez.map_or(0, |m| m.solo_tickets),
+        mez_group_tickets: mez.map_or(0, |m| m.group_tickets),
+        mez_stalls: mez.map_or_else(Vec::new, |m| m.stalls.clone()),
         version: version.to_string(),
         mhf_folder: None,
         mhf_flags: None,
@@ -240,8 +214,7 @@ pub fn save_config(
 
     let json = serde_json::to_string_pretty(&config)?;
     std::fs::create_dir_all(game_dir)?;
-    std::fs::write(game_dir.join("config.json"), json)
-        .context("failed to write config.json")?;
+    std::fs::write(game_dir.join("config.json"), json).context("failed to write config.json")?;
 
     Ok(())
 }

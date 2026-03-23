@@ -95,18 +95,6 @@ pub enum FileKind {
     Config,
 }
 
-impl FileKind {
-    /// Human-readable label used in report output.
-    pub fn label(self) -> &'static str {
-        match self {
-            Self::Core        => "core",
-            Self::Url         => "url",
-            Self::Translation => "translation",
-            Self::Config      => "config",
-        }
-    }
-}
-
 #[derive(Debug, Deserialize, Serialize)]
 pub struct FileEntry {
     /// Relative path from the game root, forward-slash separated.

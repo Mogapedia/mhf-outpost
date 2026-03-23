@@ -2,7 +2,7 @@ use anyhow::{bail, Context, Result};
 use indicatif::{ProgressBar, ProgressStyle};
 use serde::Deserialize;
 use std::io::Write;
-use std::path::{Path, PathBuf};
+use std::path::Path;
 
 /// We maintain mhf-iel-cli ourselves; only the CLI launcher binary is needed.
 /// Authentication (previously mhf-iel-auth) is now built into mhf-outpost.
@@ -43,8 +43,7 @@ pub fn fetch_launcher(dest: &Path) -> Result<()> {
     let wanted = ["mhf-iel-cli.exe"];
     let mut found = 0u32;
 
-    std::fs::create_dir_all(dest)
-        .with_context(|| format!("cannot create '{}'", dest.display()))?;
+    std::fs::create_dir_all(dest).with_context(|| format!("cannot create '{}'", dest.display()))?;
 
     for name in wanted {
         let asset = release.assets.iter().find(|a| a.name == name);
@@ -62,15 +61,13 @@ pub fn fetch_launcher(dest: &Path) -> Result<()> {
         bail!("mhf-iel-cli.exe not found in release {}", release.tag_name);
     }
 
-    println!("\nPlace mhf-iel-cli.exe in your MHF game folder, then authenticate via the launcher UI.");
+    println!(
+        "\nPlace mhf-iel-cli.exe in your MHF game folder, then authenticate via the launcher UI."
+    );
     Ok(())
 }
 
-fn download_asset(
-    client: &reqwest::blocking::Client,
-    asset: &Asset,
-    dest: &Path,
-) -> Result<()> {
+fn download_asset(client: &reqwest::blocking::Client, asset: &Asset, dest: &Path) -> Result<()> {
     use std::io::Read;
 
     // Skip if already present and correct size.
@@ -257,13 +254,4 @@ fn av_exclude_windows(game_dir: &Path) -> Result<()> {
         );
     }
     Ok(())
-}
-
-// ── helpers ───────────────────────────────────────────────────────────────────
-
-pub fn launcher_paths(game_dir: &Path) -> (PathBuf, PathBuf) {
-    (
-        game_dir.join("mhf-iel-cli.exe"),
-        game_dir.join("mhf-iel-auth.exe"),
-    )
 }
