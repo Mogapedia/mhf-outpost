@@ -5,10 +5,16 @@ use indicatif::{ProgressBar, ProgressStyle};
 use std::fs::{File, OpenOptions};
 use std::io::{Read, Write};
 use std::path::{Component, Path, PathBuf};
+use std::sync::Arc;
 use std::time::Duration;
 
 const CHUNK: usize = 64 * 1024; // 64 KiB
 const CONNECT_TIMEOUT: Duration = Duration::from_secs(30);
+
+/// Progress callback invoked during archive download: `(bytes_done, bytes_total)`.
+/// When set, the in-process indicatif bar is suppressed so only the callback drives
+/// progress reporting (used by the Tauri GUI layer).
+pub type ProgressCallback = Arc<dyn Fn(u64, u64) + Send + Sync>;
 
 // ── Public entry point ────────────────────────────────────────────────────────
 
@@ -21,6 +27,9 @@ pub struct DownloadOptions {
     pub yes: bool,
     /// Keep the archive after successful extraction.
     pub keep_archive: bool,
+    /// Optional progress callback invoked every ~64 KiB during the download phase.
+    /// When `Some`, the indicatif progress bar is suppressed on stdout.
+    pub on_progress: Option<ProgressCallback>,
 }
 
 pub fn run(manifest: &Manifest, opts: DownloadOptions) -> Result<()> {
@@ -44,7 +53,7 @@ pub fn run(manifest: &Manifest, opts: DownloadOptions) -> Result<()> {
         .unwrap_or_else(|| opts.dest.join(&archive.filename));
 
     // ── 1. Download ───────────────────────────────────────────────────────────
-    download_file(archive, &archive_path)?;
+    download_file(archive, &archive_path, opts.on_progress.as_ref())?;
 
     // ── 2. Verify archive integrity ───────────────────────────────────────────
     println!("\nVerifying archive integrity…");
@@ -115,11 +124,18 @@ fn prompt_disclaimer(name: &str) -> Result<()> {
 
 // ── HTTP download (with resume) ───────────────────────────────────────────────
 
-fn download_file(archive: &ArchiveSource, dest: &Path) -> Result<()> {
+fn download_file(
+    archive: &ArchiveSource,
+    dest: &Path,
+    on_progress: Option<&ProgressCallback>,
+) -> Result<()> {
     let existing = dest.metadata().map(|m| m.len()).unwrap_or(0);
 
     if existing == archive.size {
         println!("Archive already present and correct size — skipping download.");
+        if let Some(cb) = on_progress {
+            cb(archive.size, archive.size);
+        }
         return Ok(());
     }
 
@@ -152,16 +168,22 @@ fn download_file(archive: &ArchiveSource, dest: &Path) -> Result<()> {
         content_len.max(archive.size)
     };
 
-    let pb = ProgressBar::new(total);
-    pb.set_style(
-        ProgressStyle::with_template(
-            "{spinner:.cyan} [{bar:40.cyan/blue}] {bytes}/{total_bytes} \
-             ({binary_bytes_per_sec}, {eta})",
-        )
-        .unwrap()
-        .progress_chars("=>-"),
-    );
-    pb.set_position(existing);
+    // Use indicatif only when no external callback drives progress reporting.
+    let pb = if on_progress.is_none() {
+        let bar = ProgressBar::new(total);
+        bar.set_style(
+            ProgressStyle::with_template(
+                "{spinner:.cyan} [{bar:40.cyan/blue}] {bytes}/{total_bytes} \
+                 ({binary_bytes_per_sec}, {eta})",
+            )
+            .unwrap()
+            .progress_chars("=>-"),
+        );
+        bar.set_position(existing);
+        Some(bar)
+    } else {
+        None
+    };
 
     let mut file = if resumed {
         OpenOptions::new()
@@ -172,6 +194,7 @@ fn download_file(archive: &ArchiveSource, dest: &Path) -> Result<()> {
         File::create(dest).with_context(|| format!("cannot create '{}'", dest.display()))?
     };
 
+    let mut bytes_done = existing;
     let mut buf = vec![0u8; CHUNK];
     loop {
         let n = resp.read(&mut buf)?;
@@ -179,9 +202,17 @@ fn download_file(archive: &ArchiveSource, dest: &Path) -> Result<()> {
             break;
         }
         file.write_all(&buf[..n])?;
-        pb.inc(n as u64);
+        bytes_done += n as u64;
+        if let Some(bar) = &pb {
+            bar.inc(n as u64);
+        }
+        if let Some(cb) = on_progress {
+            cb(bytes_done, total);
+        }
     }
-    pb.finish_and_clear();
+    if let Some(bar) = pb {
+        bar.finish_and_clear();
+    }
     println!("✓ Download complete ({})", dest.display());
     Ok(())
 }

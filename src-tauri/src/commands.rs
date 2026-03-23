@@ -1,6 +1,7 @@
 use mhf_outpost_core::{auth, check, download, launcher, manifest, verify};
 use serde::Serialize;
 use std::path::PathBuf;
+use std::sync::Arc;
 use tauri::Emitter;
 
 // ── DTOs ─────────────────────────────────────────────────────────────────────
@@ -156,6 +157,22 @@ pub async fn download_version(
         },
     );
 
+    // Build a progress callback that forwards byte counts to the frontend.
+    let window_cb = window.clone();
+    let version_cb = version.clone();
+    let on_progress: download::ProgressCallback = Arc::new(move |done, total| {
+        let _ = window_cb.emit(
+            "download-progress",
+            DownloadProgressEvent {
+                version: version_cb.clone(),
+                phase: "download".to_string(),
+                bytes_done: done,
+                bytes_total: total,
+                message: None,
+            },
+        );
+    });
+
     let result = tauri::async_runtime::spawn_blocking(move || {
         download::run(
             &manifest,
@@ -164,6 +181,7 @@ pub async fn download_version(
                 archive_path: None,
                 yes: true,
                 keep_archive: false,
+                on_progress: Some(on_progress),
             },
         )
     })

@@ -296,6 +296,7 @@ fn cmd_download(
             archive_path: archive,
             yes,
             keep_archive,
+            on_progress: None,
         },
     )
 }
