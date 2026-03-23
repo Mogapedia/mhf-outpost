@@ -236,6 +236,29 @@ pub async fn authenticate(
     .map_err(|e| e.to_string())?
 }
 
+/// Resolve a character from the login session: look up by id, or create a new
+/// one when `char_id == 0`.  Returns `(resolved_id, character)`.
+fn resolve_character(
+    login: &auth::LoginResponse,
+    char_id: u32,
+    server: &str,
+) -> Result<(u32, auth::Character), String> {
+    if char_id == 0 {
+        let new_char =
+            auth::create_character(server, &login.user.token).map_err(|e| e.to_string())?;
+        let id = new_char.id;
+        Ok((id, new_char))
+    } else {
+        let c = login
+            .characters
+            .iter()
+            .find(|c| c.id == char_id)
+            .ok_or_else(|| format!("character {char_id} not found"))?
+            .clone();
+        Ok((c.id, c))
+    }
+}
+
 /// Finalise authentication by selecting a character and writing config.json.
 /// `session_json` is the blob returned by `authenticate`.
 /// Pass `char_id = 0` to create a new character.
@@ -250,23 +273,7 @@ pub async fn select_character(
     tauri::async_runtime::spawn_blocking(move || {
         let login: auth::LoginResponse =
             serde_json::from_str(&session_json).map_err(|e| format!("invalid session: {e}"))?;
-
-        let (id, char_data) = if char_id == 0 {
-            // Create a new character
-            let new_char =
-                auth::create_character(&server, &login.user.token).map_err(|e| e.to_string())?;
-            let id = new_char.id;
-            (id, new_char)
-        } else {
-            let c = login
-                .characters
-                .iter()
-                .find(|c| c.id == char_id)
-                .ok_or_else(|| format!("character {char_id} not found"))?
-                .clone();
-            (c.id, c)
-        };
-
+        let (id, char_data) = resolve_character(&login, char_id, &server)?;
         auth::save_config(
             std::path::Path::new(&game_path),
             &server,
@@ -297,22 +304,7 @@ pub async fn launch_game_authed(
     tauri::async_runtime::spawn_blocking(move || {
         let login: auth::LoginResponse =
             serde_json::from_str(&session_json).map_err(|e| format!("invalid session: {e}"))?;
-
-        let (id, char_data) = if char_id == 0 {
-            let new_char =
-                auth::create_character(&server, &login.user.token).map_err(|e| e.to_string())?;
-            let id = new_char.id;
-            (id, new_char)
-        } else {
-            let c = login
-                .characters
-                .iter()
-                .find(|c| c.id == char_id)
-                .ok_or_else(|| format!("character {char_id} not found"))?
-                .clone();
-            (c.id, c)
-        };
-
+        let (id, char_data) = resolve_character(&login, char_id, &server)?;
         auth::save_config(
             std::path::Path::new(&path),
             &server,
@@ -322,7 +314,6 @@ pub async fn launch_game_authed(
             &version,
         )
         .map_err(|e| e.to_string())?;
-
         launcher::launch(std::path::Path::new(&path), false).map_err(|e| e.to_string())
     })
     .await
