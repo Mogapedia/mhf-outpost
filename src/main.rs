@@ -13,7 +13,7 @@ use verify::{FileStatus, VerifyReport};
 
 #[derive(Parser)]
 #[command(
-    name = "mhf-installer",
+    name = "mhf-outpost",
     about = "MHF game file verifier and installer helper",
     version
 )]
@@ -240,7 +240,7 @@ fn cmd_download(
     let sys = check::system_checks();
     let errors: Vec<_> = sys.iter().filter(|c| c.status == check::Status::Error).collect();
     if !errors.is_empty() {
-        println!("⚠  System issues detected (run `mhf-installer check` for details):");
+        println!("⚠  System issues detected (run `mhf-outpost check` for details):");
         for e in &errors {
             println!("   ✗ {}: {}", e.name, e.detail);
         }
@@ -391,7 +391,7 @@ fn cmd_verify(
     if manifest.files.is_empty() {
         bail!(
             "manifest for '{}' has no [[files]] entries yet.\n\
-             Run `mhf-installer hash-dir <game_dir> --toml` to generate them.",
+             Run `mhf-outpost hash-dir <game_dir> --toml` to generate them.",
             version
         );
     }

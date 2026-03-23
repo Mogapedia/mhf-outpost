@@ -3,17 +3,17 @@ members = [".", "src-tauri"]
 resolver = "2"
 
 [package]
-name = "mhf-installer"
+name = "mhf-outpost"
 version = "0.1.0"
 edition = "2021"
 description = "MHF game file verifier, installer and launcher"
 
 [lib]
-name = "mhf_installer_core"
+name = "mhf_outpost_core"
 path = "src/lib.rs"
 
 [[bin]]
-name = "mhf-installer"
+name = "mhf-outpost"
 path = "src/main.rs"
 
 [dependencies]

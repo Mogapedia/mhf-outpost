@@ -77,7 +77,7 @@ pub fn run(manifest: &Manifest, opts: DownloadOptions) -> Result<()> {
     maybe_extract_inner(&opts.dest)?;
 
     println!(
-        "\nDone. Run `mhf-installer verify --version {} --path {}` to confirm.",
+        "\nDone. Run `mhf-outpost verify --version {} --path {}` to confirm.",
         manifest.version.id.to_ascii_lowercase(),
         opts.dest.display()
     );
@@ -122,7 +122,7 @@ fn download_file(archive: &ArchiveSource, dest: &Path) -> Result<()> {
     }
 
     let client = reqwest::blocking::Client::builder()
-        .user_agent("mhf-installer/0.1")
+        .user_agent("mhf-outpost/0.1")
         .build()?;
 
     let mut req = client.get(archive.download_url());
@@ -411,7 +411,7 @@ where
     }
 
     let client = reqwest::blocking::Client::builder()
-        .user_agent("mhf-installer/0.1")
+        .user_agent("mhf-outpost/0.1")
         .build()?;
 
     let mut req = client.get(archive.download_url());

@@ -1,4 +1,4 @@
-use mhf_installer_core::{auth, check, download, launcher, manifest};
+use mhf_outpost_core::{auth, check, download, launcher, manifest};
 use serde::Serialize;
 use std::path::PathBuf;
 use tauri::Emitter;

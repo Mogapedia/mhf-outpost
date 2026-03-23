@@ -5,7 +5,7 @@ use std::io::Write;
 use std::path::{Path, PathBuf};
 
 /// We maintain mhf-iel-cli ourselves; only the CLI launcher binary is needed.
-/// Authentication (previously mhf-iel-auth) is now built into mhf-installer.
+/// Authentication (previously mhf-iel-auth) is now built into mhf-outpost.
 const GITHUB_API: &str = "https://api.github.com/repos/rockisch/mhf-iel/releases/latest";
 
 // ── GitHub release fetching ───────────────────────────────────────────────────
@@ -26,7 +26,7 @@ struct Asset {
 /// Download mhf-iel-cli.exe and mhf-iel-auth.exe into `dest`.
 pub fn fetch_launcher(dest: &Path) -> Result<()> {
     let client = reqwest::blocking::Client::builder()
-        .user_agent("mhf-installer/0.1")
+        .user_agent("mhf-outpost/0.1")
         .build()?;
 
     println!("Fetching latest mhf-iel release from GitHub…");
@@ -39,7 +39,7 @@ pub fn fetch_launcher(dest: &Path) -> Result<()> {
 
     println!("Latest release: {}", release.tag_name);
 
-    // Only the CLI launcher is needed; authentication is now built into mhf-installer.
+    // Only the CLI launcher is needed; authentication is now built into mhf-outpost.
     let wanted = ["mhf-iel-cli.exe"];
     let mut found = 0u32;
 
@@ -119,13 +119,13 @@ pub fn launch(game_dir: &Path, auth_first: bool) -> Result<()> {
     let config_path = game_dir.join("config.json");
     let cli_exe = game_dir.join("mhf-iel-cli.exe");
 
-    // Authentication is now handled by mhf-installer itself (auth module).
+    // Authentication is now handled by mhf-outpost itself (auth module).
     // If auth is needed, the caller should run auth::authenticate() first.
     if auth_first || !config_path.exists() || token_expired(&config_path) {
         bail!(
             "config.json is missing or has no valid token.\n\
              Use the launcher UI to authenticate, or run:\n  \
-             mhf-installer launch --path {} --auth",
+             mhf-outpost launch --path {} --auth",
             game_dir.display()
         );
     }
@@ -133,7 +133,7 @@ pub fn launch(game_dir: &Path, auth_first: bool) -> Result<()> {
     if !cli_exe.exists() {
         bail!(
             "mhf-iel-cli.exe not found in '{}'\n\
-             Run: mhf-installer fetch-launcher --path {}",
+             Run: mhf-outpost fetch-launcher --path {}",
             game_dir.display(),
             game_dir.display()
         );
@@ -184,7 +184,7 @@ fn platform_exec(exe: &Path, cwd: &Path) -> Result<std::process::ExitStatus> {
         }
         bail!(
             "wine not found — install Wine to run MHF on Linux\n\
-             Run `mhf-installer check` for details"
+             Run `mhf-outpost check` for details"
         )
     }
 }

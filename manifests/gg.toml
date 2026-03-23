@@ -13,4 +13,4 @@ sha1       = "3a7b20c1bc69b56d100306f1db9ce7f4770a2513"
 md5        = "8f928b2d31ca7d0321df1ec4a0af801d"
 
 # [[files]] entries not yet recorded.
-# Run: mhf-installer hash-dir <extracted_dir> --toml
+# Run: mhf-outpost hash-dir <extracted_dir> --toml

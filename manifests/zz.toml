@@ -5,7 +5,7 @@ description = "Latest PC version (2023-11-15 build) — no archive.org upload"
 platform    = "pc"
 
 # No archive.org source for ZZ — obtain files through the community.
-# Run: mhf-installer hash-dir <game_dir> --toml --exclude GameGuard --exclude mods
+# Run: mhf-outpost hash-dir <game_dir> --toml --exclude GameGuard --exclude mods
 # to generate the sha256 entries below.
 
 # ── Core executables ──────────────────────────────────────────────────────────

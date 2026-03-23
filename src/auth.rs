@@ -150,7 +150,7 @@ pub struct ConfigNotice {
 /// character selection before writing config.json.
 pub fn authenticate(server: &str, action: &str, username: &str, password: &str) -> Result<LoginResponse> {
     let client = reqwest::blocking::Client::builder()
-        .user_agent("mhf-installer/0.1")
+        .user_agent("mhf-outpost/0.1")
         .build()?;
     let url = format!("{}/{}", server.trim_end_matches('/'), action);
 
@@ -174,7 +174,7 @@ pub fn authenticate(server: &str, action: &str, username: &str, password: &str) 
 /// Create a new character on the server and return it.
 pub fn create_character(server: &str, token: &str) -> Result<Character> {
     let client = reqwest::blocking::Client::builder()
-        .user_agent("mhf-installer/0.1")
+        .user_agent("mhf-outpost/0.1")
         .build()?;
     let url = format!("{}/character/create", server.trim_end_matches('/'));
 

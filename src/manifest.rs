@@ -152,7 +152,7 @@ impl Manifest {
             .map(|(_, src)| *src)
             .with_context(|| {
                 format!(
-                    "unknown version '{}' — run `mhf-installer list` to see available versions",
+                    "unknown version '{}' — run `mhf-outpost list` to see available versions",
                     id
                 )
             })?;
