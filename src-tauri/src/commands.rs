@@ -1,4 +1,4 @@
-use mhf_outpost_core::{auth, check, download, launcher, manifest};
+use mhf_outpost_core::{auth, check, download, launcher, manifest, verify};
 use serde::Serialize;
 use std::path::PathBuf;
 use tauri::Emitter;
@@ -84,6 +84,54 @@ pub fn run_checks(game_path: Option<String>) -> Vec<CheckDto> {
             fix: c.fix,
         })
         .collect()
+}
+
+/// Summary of a `verify` run returned to the frontend.
+#[derive(Serialize, Clone)]
+pub struct VerifyResultDto {
+    pub ok: bool,
+    pub ok_count: usize,
+    pub placeholder_count: usize,
+    pub failure_count: usize,
+    pub modified_count: usize,
+    /// Human-readable list of hard failures (path + reason).
+    pub failures: Vec<String>,
+}
+
+/// Verify the installed game files against the embedded manifest checksums.
+#[tauri::command]
+pub fn verify_version(version: String, path: String) -> Result<VerifyResultDto, String> {
+    let manifest = manifest::Manifest::load(&version).map_err(|e| e.to_string())?;
+    let root = std::path::Path::new(&path);
+    let report = verify::verify(&manifest, root);
+
+    let failures: Vec<String> = report
+        .hard_failures()
+        .map(|r| {
+            let reason = match &r.status {
+                verify::FileStatus::Missing => "missing".to_string(),
+                verify::FileStatus::SizeMismatch { expected, actual } => {
+                    format!("size mismatch (expected {expected} B, got {actual} B)")
+                }
+                verify::FileStatus::Modified { .. } => "modified (core file)".to_string(),
+                verify::FileStatus::Unreadable(e) => format!("unreadable: {e}"),
+                _ => "unknown".to_string(),
+            };
+            format!("{}: {}", r.path, reason)
+        })
+        .collect();
+
+    let failure_count = failures.len();
+    let ok = failure_count == 0;
+
+    Ok(VerifyResultDto {
+        ok,
+        ok_count: report.ok_count(),
+        placeholder_count: report.placeholder_count(),
+        failure_count,
+        modified_count: report.modified().count(),
+        failures,
+    })
 }
 
 #[tauri::command]

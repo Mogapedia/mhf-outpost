@@ -55,6 +55,18 @@ const checkGamePath = ref('')
 // Download state
 const downloading = ref<Record<string, { phase: string; progress: number; message: string }>>({})
 
+// Verify state (per version)
+interface VerifyResult {
+  ok: boolean
+  ok_count: number
+  placeholder_count: number
+  failure_count: number
+  modified_count: number
+  failures: string[]
+}
+const verifying = ref<Record<string, boolean>>({})
+const verifyResults = ref<Record<string, VerifyResult>>({})
+
 // ── Server / auth state ───────────────────────────────────────────────────────
 // Global — independent of which client version is selected.
 
@@ -224,6 +236,25 @@ async function runAvExclude() {
   }
 }
 
+async function verifyInstall() {
+  if (!selectedId.value || !selectedPath.value) return
+  const id = selectedId.value
+  verifying.value[id] = true
+  delete verifyResults.value[id]
+  try {
+    const result = await invoke<VerifyResult>('verify_version', {
+      version: id,
+      path: selectedPath.value,
+    })
+    verifyResults.value[id] = result
+    showToast(result.ok ? 'Verification passed ✓' : `Verification failed — ${result.failure_count} issue(s)`, result.ok ? 'ok' : 'err')
+  } catch (e: any) {
+    showToast(e, 'err')
+  } finally {
+    verifying.value[id] = false
+  }
+}
+
 async function runChecks() {
   checksLoading.value = true
   checks.value = []
@@ -340,6 +371,11 @@ async function runChecks() {
               :disabled="isDownloading"
               @click="launchGame"
             >&#x25B6;  Play</button>
+            <button
+              class="btn-outline"
+              :disabled="verifying[selected.id]"
+              @click="verifyInstall"
+            >{{ verifying[selected.id] ? 'Verifying…' : '&#x2713;  Verify' }}</button>
             <button class="btn-outline" @click="fetchLauncher">Update launcher</button>
             <button class="btn-outline" @click="runAvExclude">AV Exclude (Windows)</button>
           </template>
@@ -353,6 +389,29 @@ async function runChecks() {
             </button>
             <button class="btn-outline" v-if="selectedPath" @click="fetchLauncher">Get launcher only</button>
           </template>
+        </div>
+
+        <!-- Verify result -->
+        <div class="verify-result" v-if="selectedId && verifyResults[selectedId]"
+             :class="verifyResults[selectedId].ok ? 'verify-ok' : 'verify-fail'">
+          <div class="verify-summary">
+            <span v-if="verifyResults[selectedId].ok">
+              &#x2713; All {{ verifyResults[selectedId].ok_count }} files verified
+              <span v-if="verifyResults[selectedId].placeholder_count">
+                ({{ verifyResults[selectedId].placeholder_count }} untracked)
+              </span>
+            </span>
+            <span v-else>
+              &#x2717; {{ verifyResults[selectedId].failure_count }} issue(s) —
+              {{ verifyResults[selectedId].ok_count }} files OK
+            </span>
+            <span v-if="verifyResults[selectedId].modified_count" class="verify-modified">
+              · {{ verifyResults[selectedId].modified_count }} modified (non-core)
+            </span>
+          </div>
+          <ul class="verify-failures" v-if="verifyResults[selectedId].failures.length">
+            <li v-for="f in verifyResults[selectedId].failures" :key="f">{{ f }}</li>
+          </ul>
         </div>
 
         <!-- Tip -->
@@ -797,6 +856,27 @@ async function runChecks() {
   font-size: 13px;
   color: var(--text-dim);
   line-height: 1.6;
+}
+
+.verify-result {
+  border-radius: 6px;
+  border: 1px solid var(--border);
+  padding: 12px 16px;
+  font-size: 13px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.verify-ok  { border-left: 3px solid var(--ok);  background: rgba(86,168,86,.06); }
+.verify-fail { border-left: 3px solid var(--err); background: rgba(207,79,79,.06); }
+.verify-summary { font-weight: 600; }
+.verify-ok .verify-summary  { color: var(--ok); }
+.verify-fail .verify-summary { color: var(--err); }
+.verify-modified { color: var(--warn); font-weight: 400; }
+.verify-failures {
+  margin: 0; padding: 0 0 0 16px;
+  font-size: 12px; color: var(--err);
+  display: flex; flex-direction: column; gap: 2px;
 }
 
 /* ── Server pane ── */

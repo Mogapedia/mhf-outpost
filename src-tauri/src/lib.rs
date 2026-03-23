@@ -8,6 +8,7 @@ pub fn run() {
             commands::list_versions,
             commands::get_version_info,
             commands::run_checks,
+            commands::verify_version,
             commands::download_version,
             commands::launch_game,
             commands::fetch_launcher,
