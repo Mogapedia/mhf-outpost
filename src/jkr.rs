@@ -49,7 +49,10 @@ pub fn decompress_jkr(data: &[u8]) -> Result<Vec<u8>> {
     let payload = if data_offset <= data.len() {
         &data[data_offset..]
     } else {
-        bail!("JKR data_offset ({data_offset}) exceeds data length ({})", data.len());
+        bail!(
+            "JKR data_offset ({data_offset}) exceeds data length ({})",
+            data.len()
+        );
     };
 
     match comp_type {
@@ -304,8 +307,8 @@ const MAX_MATCH_LONG: usize = 254 + 26; // Case 3: 26-280 (temp byte 0xFF is res
 
 /// Hash chain-based LZ77 match finder.
 struct MatchFinder {
-    head: Vec<i32>,       // hash → most recent position
-    prev: Vec<i32>,       // position → previous position with same hash
+    head: Vec<i32>, // hash → most recent position
+    prev: Vec<i32>, // position → previous position with same hash
 }
 
 impl MatchFinder {
@@ -340,7 +343,11 @@ impl MatchFinder {
         let mut best_len = 0usize;
         let mut best_offset = 0usize;
         let max_len = MAX_MATCH_LONG.min(data.len() - pos);
-        let min_pos = if pos >= WINDOW_SIZE { pos - WINDOW_SIZE + 1 } else { 0 };
+        let min_pos = if pos >= WINDOW_SIZE {
+            pos - WINDOW_SIZE + 1
+        } else {
+            0
+        };
         let mut chain = 0;
 
         while candidate >= min_pos as i32 && candidate >= 0 && chain < 256 {
@@ -375,7 +382,7 @@ struct LzWriter {
     output: Vec<u8>,
     flag_byte: u8,
     flag_bits: u8,
-    flag_pos: usize, // position of current flag byte in output
+    flag_pos: usize,   // position of current flag byte in output
     data_buf: Vec<u8>, // data bytes for current flag group
 }
 
@@ -471,7 +478,7 @@ fn lz_encode(data: &[u8]) -> Vec<u8> {
                 finder.insert(data, pos + i);
             }
             pos += length;
-        } else if length >= 10 && length <= MAX_MATCH_NIBBLE && offset <= 0x1FFF {
+        } else if (10..=MAX_MATCH_NIBBLE).contains(&length) && offset <= 0x1FFF {
             // Case 2: bits 1,1 + hi,lo (length_raw=0) + bit 0 + 4 nibble bits
             writer.write_bit(1);
             writer.write_bit(1);

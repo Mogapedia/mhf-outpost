@@ -58,7 +58,11 @@ pub fn is_ecd(data: &[u8]) -> bool {
 /// Decrypt an ECD-wrapped buffer, returning the plaintext payload.
 pub fn decode_ecd(data: &[u8]) -> Result<Vec<u8>> {
     if data.len() < HEADER_SIZE {
-        bail!("ECD data too short ({} bytes, need at least {})", data.len(), HEADER_SIZE);
+        bail!(
+            "ECD data too short ({} bytes, need at least {})",
+            data.len(),
+            HEADER_SIZE
+        );
     }
     let magic = read_u32_le(data, 0);
     if magic != ECD_MAGIC {
@@ -77,7 +81,7 @@ pub fn decode_ecd(data: &[u8]) -> Result<Vec<u8>> {
         );
     }
 
-    let mut rnd = (crc32 << 16) | (crc32 >> 16) | 1;
+    let mut rnd = crc32.rotate_right(16) | 1;
     let (new_rnd, xorpad) = get_rnd_ecd(ecd_key, rnd);
     rnd = new_rnd;
     let mut r8 = (xorpad & 0xFF) as u8;
@@ -89,12 +93,12 @@ pub fn decode_ecd(data: &[u8]) -> Result<Vec<u8>> {
 
         let encrypted_byte = data[HEADER_SIZE + i];
         let mut r11 = encrypted_byte ^ r8;
-        let mut r12 = (r11 >> 4) & 0xFF;
+        let mut r12 = r11 >> 4;
 
         for _ in 0..8 {
             let r10 = (xorpad as u8) ^ r11;
             r11 = r12;
-            r12 = r12 ^ r10;
+            r12 ^= r10;
             xorpad >>= 4;
         }
 
@@ -119,7 +123,7 @@ pub fn encode_ecd(data: &[u8], key_index: u16) -> Vec<u8> {
     output.extend_from_slice(&crc32_val.to_le_bytes());
     output.resize(HEADER_SIZE + payload_size, 0);
 
-    let mut rnd = (crc32_val << 16) | (crc32_val >> 16) | 1;
+    let mut rnd = crc32_val.rotate_right(16) | 1;
     let (new_rnd, xorpad) = get_rnd_ecd(key_index, rnd);
     rnd = new_rnd;
     let mut r8 = (xorpad & 0xFF) as u8;
@@ -133,7 +137,7 @@ pub fn encode_ecd(data: &[u8], key_index: u16) -> Vec<u8> {
         for _ in 0..8 {
             let r10 = (xorpad as u8) ^ r11;
             r11 = r12;
-            r12 = r12 ^ r10;
+            r12 ^= r10;
             xorpad >>= 4;
         }
 
@@ -196,8 +200,9 @@ mod tests {
         let python_ecd = hex::decode(
             "6563641a040000001f00000065ba2db6\
              e5d18309bc6376cb67812d7f0f4cfed2\
-             b8e921dd59a4d523ab3179e59eaf37"
-        ).unwrap();
+             b8e921dd59a4d523ab3179e59eaf37",
+        )
+        .unwrap();
         let decrypted = decode_ecd(&python_ecd).unwrap();
         assert_eq!(&decrypted, b"Hello, Monster Hunter Frontier!");
     }

@@ -99,8 +99,7 @@ pub fn run(opts: TranslateOptions) -> Result<()> {
     println!("  Saved to {}", json_path.display());
 
     println!("\nApplying translations…");
-    let results =
-        crate::patch::apply_translations(&json_path, &opts.lang, &opts.dest, true, true)?;
+    let results = crate::patch::apply_translations(&json_path, &opts.lang, &opts.dest, true, true)?;
 
     for r in &results {
         println!("  ✓ {} — {} string(s) patched", r.file, r.count);
@@ -109,7 +108,11 @@ pub fn run(opts: TranslateOptions) -> Result<()> {
         println!("  No translations found for language '{}'.", opts.lang);
     } else {
         let total: usize = results.iter().map(|r| r.count).sum();
-        println!("\nDone — {} string(s) applied to {} file(s).", total, results.len());
+        println!(
+            "\nDone — {} string(s) applied to {} file(s).",
+            total,
+            results.len()
+        );
     }
 
     Ok(())

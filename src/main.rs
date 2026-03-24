@@ -222,11 +222,7 @@ fn main() -> Result<()> {
         Command::ServerInfo { server, version } => {
             translate::server_info(&server, version.as_deref())
         }
-        Command::Translate {
-            path,
-            lang,
-            repo,
-        } => translate::run(translate::TranslateOptions {
+        Command::Translate { path, lang, repo } => translate::run(translate::TranslateOptions {
             dest: path,
             lang,
             repo,

@@ -32,10 +32,7 @@ fn xpath_to_game_file(xpath_prefix: &str) -> Option<&'static str> {
 
 /// Parse a location string like "0x46e000@mhfdat-jp.bin" → hex offset.
 fn parse_location(location: &str) -> Result<usize> {
-    let hex_part = location
-        .split('@')
-        .next()
-        .unwrap_or(location);
+    let hex_part = location.split('@').next().unwrap_or(location);
     let hex_str = hex_part.trim_start_matches("0x").trim_start_matches("0X");
     usize::from_str_radix(hex_str, 16)
         .with_context(|| format!("invalid hex offset in location: {location}"))
@@ -87,14 +84,8 @@ pub fn apply_translations(
         };
 
         for entry in entries {
-            let location = entry
-                .get("location")
-                .and_then(|v| v.as_str())
-                .unwrap_or("");
-            let target = entry
-                .get("target")
-                .and_then(|v| v.as_str())
-                .unwrap_or("");
+            let location = entry.get("location").and_then(|v| v.as_str()).unwrap_or("");
+            let target = entry.get("target").and_then(|v| v.as_str()).unwrap_or("");
 
             if target.is_empty() || location.is_empty() {
                 continue;
@@ -224,8 +215,7 @@ mod tests {
         write!(f, "{}", serde_json::to_string(&json).unwrap()).unwrap();
 
         // Apply without compress/encrypt so we can inspect raw output.
-        let results =
-            apply_translations(&json_path, "fr", &dir, false, false).unwrap();
+        let results = apply_translations(&json_path, "fr", &dir, false, false).unwrap();
 
         assert_eq!(results.len(), 1);
         assert_eq!(results[0].file, "dat/mhfdat.bin");
