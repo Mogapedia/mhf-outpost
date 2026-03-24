@@ -1,7 +1,10 @@
 mod check;
 mod download;
+mod ecd;
+mod jkr;
 mod launcher;
 mod manifest;
+mod patch;
 mod translate;
 mod verify;
 
@@ -151,10 +154,7 @@ enum Command {
     ///
     /// Downloads `translations-translated.json` from the latest release of the
     /// specified GitHub repository (no original game data — patches only), then
-    /// applies it to the game files using FrontierTextHandler.
-    ///
-    /// If --fth-dir is provided, the patch is applied automatically.
-    /// Otherwise the JSON is saved and the exact command to run is printed.
+    /// applies it directly to the game files (ECD encrypt + JKR compress).
     Translate {
         /// Game root directory (contains mhf.exe, dat/, …).
         #[arg(short, long)]
@@ -167,10 +167,6 @@ enum Command {
         /// GitHub repository (owner/repo) hosting the translation releases.
         #[arg(short, long, default_value = translate::DEFAULT_REPO)]
         repo: String,
-
-        /// Path to a FrontierTextHandler checkout for automatic application.
-        #[arg(long, value_name = "DIR")]
-        fth_dir: Option<PathBuf>,
     },
 
     /// Compute the SHA-256 and SHA-1 of a single file.
@@ -230,12 +226,10 @@ fn main() -> Result<()> {
             path,
             lang,
             repo,
-            fth_dir,
         } => translate::run(translate::TranslateOptions {
             dest: path,
             lang,
             repo,
-            fth_dir,
         }),
         Command::Hash { path } => cmd_hash(&path),
         Command::HashDir {

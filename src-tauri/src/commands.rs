@@ -362,11 +362,11 @@ pub struct TranslateResultDto {
     pub release_tag: String,
 }
 
-/// Download translations-translated.json from the latest GitHub release.
+/// Download and apply translations from the latest GitHub release.
 ///
-/// The JSON is saved into `game_dir` so it can later be applied with
-/// FrontierTextHandler.  No game data is modified; only the patch file is
-/// downloaded.
+/// Downloads `translations-translated.json` and applies translated strings
+/// directly to the game files (auto-decrypt, patch pointers, re-compress,
+/// re-encrypt).  No external tools required.
 #[tauri::command]
 pub async fn download_translations(
     game_dir: String,
@@ -378,7 +378,6 @@ pub async fn download_translations(
             dest: std::path::PathBuf::from(&game_dir),
             lang,
             repo,
-            fth_dir: None,
         })
         .map_err(|e| e.to_string())?;
 

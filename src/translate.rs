@@ -37,8 +37,6 @@ pub struct TranslateOptions {
     pub lang: String,
     /// GitHub repository slug (e.g. "mogapedia/MHFrontier-Translation").
     pub repo: String,
-    /// Optional path to a FrontierTextHandler checkout for auto-apply.
-    pub fth_dir: Option<std::path::PathBuf>,
 }
 
 /// Download `translations-translated.json` from the latest GitHub release and
@@ -100,60 +98,21 @@ pub fn run(opts: TranslateOptions) -> Result<()> {
     download_asset(&client, asset, &json_path)?;
     println!("  Saved to {}", json_path.display());
 
-    // Try to apply via FrontierTextHandler if a checkout was provided.
-    if let Some(fth_dir) = &opts.fth_dir {
-        apply_with_fth(fth_dir, &json_path, &opts.dest, &opts.lang)?;
+    println!("\nApplying translations…");
+    let results =
+        crate::patch::apply_translations(&json_path, &opts.lang, &opts.dest, true, true)?;
+
+    for r in &results {
+        println!("  ✓ {} — {} string(s) patched", r.file, r.count);
+    }
+    if results.is_empty() {
+        println!("  No translations found for language '{}'.", opts.lang);
     } else {
-        print_apply_instructions(&json_path, &opts.dest, &opts.lang);
+        let total: usize = results.iter().map(|r| r.count).sum();
+        println!("\nDone — {} string(s) applied to {} file(s).", total, results.len());
     }
 
     Ok(())
-}
-
-/// Invoke FrontierTextHandler to apply the translation JSON in-place.
-fn apply_with_fth(fth_dir: &Path, json_path: &Path, game_dir: &Path, lang: &str) -> Result<()> {
-    let main_py = fth_dir.join("main.py");
-    if !main_py.exists() {
-        bail!(
-            "FrontierTextHandler not found at {} — run manually:\n{}",
-            fth_dir.display(),
-            apply_command(json_path, game_dir, lang)
-        );
-    }
-
-    println!("\nApplying translations via FrontierTextHandler…");
-    let status = std::process::Command::new("python")
-        .arg(&main_py)
-        .arg(json_path)
-        .args(["--apply-translations", "--lang", lang])
-        .arg("--game-dir")
-        .arg(game_dir)
-        .args(["--compress", "--encrypt"])
-        .status()
-        .context("failed to launch python — is Python installed?")?;
-
-    if !status.success() {
-        bail!("FrontierTextHandler exited with status {}", status);
-    }
-    Ok(())
-}
-
-/// Print the manual FrontierTextHandler command the user needs to run.
-fn print_apply_instructions(json_path: &Path, game_dir: &Path, lang: &str) {
-    println!(
-        "\nTranslation data downloaded.  To apply it, run FrontierTextHandler:\n\n  {}\n",
-        apply_command(json_path, game_dir, lang)
-    );
-    println!("Or pass --fth-dir <path/to/FrontierTextHandler> to apply automatically.");
-}
-
-fn apply_command(json_path: &Path, game_dir: &Path, lang: &str) -> String {
-    format!(
-        "python main.py {} --apply-translations --lang {} --game-dir {} --compress --encrypt",
-        json_path.display(),
-        lang,
-        game_dir.display(),
-    )
 }
 
 // ── Server info ───────────────────────────────────────────────────────────────
