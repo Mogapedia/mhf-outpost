@@ -37,7 +37,7 @@ interface CharDto { id: number; name: string; hr: number; gr: number; is_female:
 
 const versions = ref<Version[]>([])
 const selectedId = ref<string | null>(null)
-const view = ref<'library' | 'server' | 'checks'>('library')
+const view = ref<'library' | 'server' | 'translations' | 'checks'>('library')
 
 // Per-version installed paths (stored in localStorage)
 const installedPaths = ref<Record<string, string>>(
@@ -131,6 +131,43 @@ function selectChar(char: CharDto) {
   activeChar.value = char
   authStep.value = 'done'
   showToast(`Ready — playing as ${char.name}`)
+}
+
+// ── Translation state ────────────────────────────────────────────────────────
+
+const transLang = ref(localStorage.getItem('transLang') ?? 'fr')
+const transRepo = ref(localStorage.getItem('transRepo') ?? 'mogapedia/MHFrontier-Translation')
+const transLoading = ref(false)
+const transResult = ref<{ json_path: string; release_tag: string } | null>(null)
+const transError = ref('')
+
+function saveTransPrefs() {
+  localStorage.setItem('transLang', transLang.value)
+  localStorage.setItem('transRepo', transRepo.value)
+}
+
+async function downloadTranslations() {
+  if (!selectedPath.value) {
+    showToast('Set an install path in the Library tab first', 'err')
+    return
+  }
+  transLoading.value = true
+  transError.value = ''
+  transResult.value = null
+  saveTransPrefs()
+  try {
+    transResult.value = await invoke<{ json_path: string; release_tag: string }>('download_translations', {
+      gameDir: selectedPath.value,
+      lang: transLang.value,
+      repo: transRepo.value,
+    })
+    showToast('Translation data downloaded')
+  } catch (e: any) {
+    transError.value = String(e)
+    showToast('Translation download failed', 'err')
+  } finally {
+    transLoading.value = false
+  }
 }
 
 // Toast / status message
@@ -283,6 +320,9 @@ async function runChecks() {
         <button :class="['nav-tab', view === 'server' ? 'active' : '']" @click="view = 'server'">
           Server
           <span class="auth-dot" :class="isAuthenticated ? 'ok' : 'off'"></span>
+        </button>
+        <button :class="['nav-tab', view === 'translations' ? 'active' : '']" @click="view = 'translations'">
+          Translations
         </button>
         <button :class="['nav-tab', view === 'checks' ? 'active' : '']" @click="view = 'checks'; runChecks()">
           Checks
@@ -499,6 +539,66 @@ async function runChecks() {
           >
             {{ authLoading ? 'Connecting…' : authAction === 'login' ? 'Login' : 'Register' }}
           </button>
+        </div>
+      </div>
+
+      <!-- Translations view -->
+      <div class="trans-pane" v-if="view === 'translations'">
+        <h1>Translations</h1>
+        <p class="trans-desc">
+          Download community translations from GitHub. The translation data
+          (JSON) is saved into your game directory and can be applied with
+          <strong>FrontierTextHandler</strong>.
+        </p>
+
+        <div class="section">
+          <label class="section-label">Game directory</label>
+          <div class="path-row">
+            <input class="path-input" :value="selectedPath" readonly
+                   :placeholder="selectedPath ? '' : 'Select a version in Library first'" />
+          </div>
+        </div>
+
+        <div class="section trans-options">
+          <div class="trans-field">
+            <label class="section-label">Language</label>
+            <input class="input" v-model="transLang" placeholder="fr" @change="saveTransPrefs" />
+          </div>
+          <div class="trans-field">
+            <label class="section-label">Repository</label>
+            <input class="input" v-model="transRepo" @change="saveTransPrefs" />
+          </div>
+        </div>
+
+        <div class="actions">
+          <button class="btn-primary" @click="downloadTranslations"
+                  :disabled="transLoading || !selectedPath">
+            {{ transLoading ? 'Downloading…' : 'Download translations' }}
+          </button>
+        </div>
+
+        <div class="trans-result" v-if="transResult">
+          <div class="check-row ok">
+            <div class="check-icon">&#10003;</div>
+            <div class="check-body">
+              <div class="check-name">Translation data saved</div>
+              <div class="check-detail">{{ transResult.json_path }}</div>
+              <div class="check-fix">
+                Apply with FrontierTextHandler:<br/>
+                <code>python main.py {{ transResult.json_path }} --apply-translations --lang {{ transLang }} --game-dir {{ selectedPath }} --compress --encrypt</code>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="trans-result" v-if="transError">
+          <div class="check-row error">
+            <div class="check-icon">&#10007;</div>
+            <div class="check-body">
+              <div class="check-name">Download failed</div>
+              <div class="check-detail">{{ transError }}</div>
+            </div>
+          </div>
         </div>
       </div>
 
@@ -757,6 +857,16 @@ async function runChecks() {
 }
 
 .path-input:focus { border-color: var(--accent); }
+.input {
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  color: var(--text);
+  padding: 8px 12px;
+  outline: none;
+  font-size: 14px;
+}
+.input:focus { border-color: var(--accent); }
 
 .progress-block { display: flex; flex-direction: column; gap: 6px; }
 
@@ -964,6 +1074,46 @@ async function runChecks() {
 .char-meta { font-size: 11px; color: var(--text-dim); }
 
 /* ── Checks pane ── */
+/* ── Translations pane ──────────────────────────────────────────────────── */
+
+.trans-pane {
+  padding: 32px 40px;
+  max-width: 640px;
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+.trans-desc {
+  color: var(--text-dim);
+  font-size: 14px;
+  line-height: 1.5;
+  margin: 0;
+}
+.trans-options {
+  display: flex;
+  gap: 16px;
+}
+.trans-field {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.trans-result {
+  margin-top: 8px;
+}
+.trans-result code {
+  display: block;
+  margin-top: 8px;
+  padding: 8px 12px;
+  background: var(--bg-card);
+  border-radius: 6px;
+  font-size: 12px;
+  word-break: break-all;
+  white-space: pre-wrap;
+  color: var(--text);
+}
+
 .checks-pane {
   padding: 32px 40px;
   display: flex;

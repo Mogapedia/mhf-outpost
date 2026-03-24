@@ -16,6 +16,7 @@ pub fn run() {
             commands::authenticate,
             commands::select_character,
             commands::launch_game_authed,
+            commands::download_translations,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

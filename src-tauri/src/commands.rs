@@ -1,4 +1,4 @@
-use mhf_outpost_core::{auth, check, download, launcher, manifest, verify};
+use mhf_outpost_core::{auth, check, download, launcher, manifest, translate, verify};
 use serde::Serialize;
 use std::path::PathBuf;
 use std::sync::Arc;
@@ -349,6 +349,48 @@ pub async fn select_character(
             &version,
         )
         .map_err(|e| e.to_string())
+    })
+    .await
+    .map_err(|e| e.to_string())?
+}
+
+// ── Translate commands ────────────────────────────────────────────────────────
+
+#[derive(Serialize, Clone)]
+pub struct TranslateResultDto {
+    pub json_path: String,
+    pub release_tag: String,
+}
+
+/// Download translations-translated.json from the latest GitHub release.
+///
+/// The JSON is saved into `game_dir` so it can later be applied with
+/// FrontierTextHandler.  No game data is modified; only the patch file is
+/// downloaded.
+#[tauri::command]
+pub async fn download_translations(
+    game_dir: String,
+    lang: String,
+    repo: String,
+) -> Result<TranslateResultDto, String> {
+    tauri::async_runtime::spawn_blocking(move || {
+        translate::run(translate::TranslateOptions {
+            dest: std::path::PathBuf::from(&game_dir),
+            lang,
+            repo,
+            fth_dir: None,
+        })
+        .map_err(|e| e.to_string())?;
+
+        let json_path = std::path::Path::new(&game_dir)
+            .join("translations-translated.json")
+            .to_string_lossy()
+            .into_owned();
+
+        Ok(TranslateResultDto {
+            json_path,
+            release_tag: "latest".to_string(),
+        })
     })
     .await
     .map_err(|e| e.to_string())?

@@ -10,6 +10,9 @@ const REQUEST_TIMEOUT: Duration = Duration::from_secs(30);
 /// Default GitHub repository for MHFrontier translations (owner/repo).
 pub const DEFAULT_REPO: &str = "mogapedia/MHFrontier-Translation";
 
+/// Name of the release asset containing only already-translated strings.
+const TRANSLATED_JSON_ASSET: &str = "translations-translated.json";
+
 // ── GitHub API types ──────────────────────────────────────────────────────────
 
 #[derive(Deserialize)]
@@ -28,20 +31,26 @@ struct Asset {
 // ── Public entry point ────────────────────────────────────────────────────────
 
 pub struct TranslateOptions {
-    /// Game directory where translated files will be written.
+    /// Game root directory (contains `dat/`, `mhf.exe`, …).
     pub dest: std::path::PathBuf,
-    /// Language code to fetch (e.g. "fr", "en").
+    /// Language code to apply (e.g. "fr", "en").
     pub lang: String,
     /// GitHub repository slug (e.g. "mogapedia/MHFrontier-Translation").
     pub repo: String,
+    /// Optional path to a FrontierTextHandler checkout for auto-apply.
+    pub fth_dir: Option<std::path::PathBuf>,
 }
 
-/// Fetch the latest translated game files from a GitHub release and apply
-/// them to the game directory.
+/// Download `translations-translated.json` from the latest GitHub release and
+/// save it to the game directory, then apply it via FrontierTextHandler.
 ///
-/// The release is expected to contain assets named `<lang>-<file>.bin`
-/// (e.g. `fr-mhfdat.bin`, `fr-mhfpac.bin`). Each asset is written directly
-/// into `dest`, replacing the stock file.
+/// The release JSON contains only the translated strings (no original game
+/// data), so it is safe to distribute.  Applying the patch requires the user's
+/// own game files and FrontierTextHandler.
+///
+/// If `opts.fth_dir` points to a FrontierTextHandler checkout, the patch is
+/// applied automatically.  Otherwise, the JSON is saved and instructions are
+/// printed.
 pub fn run(opts: TranslateOptions) -> Result<()> {
     let client = reqwest::blocking::Client::builder()
         .user_agent("mhf-outpost/0.1")
@@ -63,61 +72,95 @@ pub fn run(opts: TranslateOptions) -> Result<()> {
 
     println!("Release: {}", release.tag_name);
 
-    // Filter to assets matching the requested language prefix.
-    let prefix = format!("{}-", opts.lang);
-    let matching: Vec<&Asset> = release
+    // Locate the translations-translated.json asset.
+    let asset = release
         .assets
         .iter()
-        .filter(|a| a.name.starts_with(&prefix) && a.name.ends_with(".bin"))
-        .collect();
-
-    if matching.is_empty() {
-        bail!(
-            "no translated .bin files found for language '{}' in release {} of {}\n\
-             Available assets: {}",
-            opts.lang,
-            release.tag_name,
-            opts.repo,
-            release
+        .find(|a| a.name == TRANSLATED_JSON_ASSET)
+        .ok_or_else(|| {
+            let available = release
                 .assets
                 .iter()
                 .map(|a| a.name.as_str())
                 .collect::<Vec<_>>()
-                .join(", ")
-        );
-    }
+                .join(", ");
+            anyhow::anyhow!(
+                "asset '{}' not found in release {} of {}\nAvailable: {}",
+                TRANSLATED_JSON_ASSET,
+                release.tag_name,
+                opts.repo,
+                available,
+            )
+        })?;
 
     std::fs::create_dir_all(&opts.dest)
         .with_context(|| format!("cannot create '{}'", opts.dest.display()))?;
 
-    let mut applied = 0usize;
-    for asset in &matching {
-        // Strip the language prefix to get the target filename (e.g. "mhfdat.bin").
-        let target_name = &asset.name[prefix.len()..];
-        let dest_path = opts.dest.join(target_name);
+    let json_path = opts.dest.join(TRANSLATED_JSON_ASSET);
+    download_asset(&client, asset, &json_path)?;
+    println!("  Saved to {}", json_path.display());
 
-        // Warn if the target file doesn't exist in the game directory —
-        // the translation is still written so the user can place it manually.
-        if !dest_path.exists() {
-            println!(
-                "  ⚠ {} not found in game directory — writing anyway",
-                target_name
-            );
-        }
-
-        download_asset(&client, asset, &dest_path)?;
-        applied += 1;
+    // Try to apply via FrontierTextHandler if a checkout was provided.
+    if let Some(fth_dir) = &opts.fth_dir {
+        apply_with_fth(fth_dir, &json_path, &opts.dest, &opts.lang)?;
+    } else {
+        print_apply_instructions(&json_path, &opts.dest, &opts.lang);
     }
 
-    println!(
-        "\n✓ Applied {} translated file(s) from {} ({})",
-        applied, opts.repo, release.tag_name
-    );
-    println!(
-        "  Files modified in: {}",
-        opts.dest.display()
-    );
     Ok(())
+}
+
+/// Invoke FrontierTextHandler to apply the translation JSON in-place.
+fn apply_with_fth(
+    fth_dir: &Path,
+    json_path: &Path,
+    game_dir: &Path,
+    lang: &str,
+) -> Result<()> {
+    let main_py = fth_dir.join("main.py");
+    if !main_py.exists() {
+        bail!(
+            "FrontierTextHandler not found at {} — run manually:\n{}",
+            fth_dir.display(),
+            apply_command(json_path, game_dir, lang)
+        );
+    }
+
+    println!("\nApplying translations via FrontierTextHandler…");
+    let status = std::process::Command::new("python")
+        .arg(&main_py)
+        .arg(json_path)
+        .args(["--apply-translations", "--lang", lang])
+        .arg("--game-dir")
+        .arg(game_dir)
+        .args(["--compress", "--encrypt"])
+        .status()
+        .context("failed to launch python — is Python installed?")?;
+
+    if !status.success() {
+        bail!("FrontierTextHandler exited with status {}", status);
+    }
+    Ok(())
+}
+
+/// Print the manual FrontierTextHandler command the user needs to run.
+fn print_apply_instructions(json_path: &Path, game_dir: &Path, lang: &str) {
+    println!(
+        "\nTranslation data downloaded.  To apply it, run FrontierTextHandler:\n\n  {}\n",
+        apply_command(json_path, game_dir, lang)
+    );
+    println!(
+        "Or pass --fth-dir <path/to/FrontierTextHandler> to apply automatically."
+    );
+}
+
+fn apply_command(json_path: &Path, game_dir: &Path, lang: &str) -> String {
+    format!(
+        "python main.py {} --apply-translations --lang {} --game-dir {} --compress --encrypt",
+        json_path.display(),
+        lang,
+        game_dir.display(),
+    )
 }
 
 // ── Server info ───────────────────────────────────────────────────────────────

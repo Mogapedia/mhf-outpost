@@ -149,24 +149,28 @@ enum Command {
 
     /// Apply fan translations from a GitHub release to the game directory.
     ///
-    /// Downloads pre-built translated .bin files from the latest release of
-    /// the specified GitHub repository and writes them into the game directory,
-    /// replacing the stock Japanese files.
+    /// Downloads `translations-translated.json` from the latest release of the
+    /// specified GitHub repository (no original game data — patches only), then
+    /// applies it to the game files using FrontierTextHandler.
     ///
-    /// The release must contain assets named `<lang>-<file>.bin`
-    /// (e.g. `fr-mhfdat.bin`, `fr-mhfpac.bin`).
+    /// If --fth-dir is provided, the patch is applied automatically.
+    /// Otherwise the JSON is saved and the exact command to run is printed.
     Translate {
-        /// Game directory to apply translations into.
+        /// Game root directory (contains mhf.exe, dat/, …).
         #[arg(short, long)]
         path: PathBuf,
 
-        /// Language code to fetch (e.g. fr, en).
+        /// Language code to apply (e.g. fr, en).
         #[arg(short, long, default_value = "fr")]
         lang: String,
 
         /// GitHub repository (owner/repo) hosting the translation releases.
         #[arg(short, long, default_value = translate::DEFAULT_REPO)]
         repo: String,
+
+        /// Path to a FrontierTextHandler checkout for automatic application.
+        #[arg(long, value_name = "DIR")]
+        fth_dir: Option<PathBuf>,
     },
 
     /// Compute the SHA-256 and SHA-1 of a single file.
@@ -222,10 +226,16 @@ fn main() -> Result<()> {
         Command::ServerInfo { server, version } => {
             translate::server_info(&server, version.as_deref())
         }
-        Command::Translate { path, lang, repo } => translate::run(translate::TranslateOptions {
+        Command::Translate {
+            path,
+            lang,
+            repo,
+            fth_dir,
+        } => translate::run(translate::TranslateOptions {
             dest: path,
             lang,
             repo,
+            fth_dir,
         }),
         Command::Hash { path } => cmd_hash(&path),
         Command::HashDir {
