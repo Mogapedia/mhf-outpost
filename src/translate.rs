@@ -111,12 +111,7 @@ pub fn run(opts: TranslateOptions) -> Result<()> {
 }
 
 /// Invoke FrontierTextHandler to apply the translation JSON in-place.
-fn apply_with_fth(
-    fth_dir: &Path,
-    json_path: &Path,
-    game_dir: &Path,
-    lang: &str,
-) -> Result<()> {
+fn apply_with_fth(fth_dir: &Path, json_path: &Path, game_dir: &Path, lang: &str) -> Result<()> {
     let main_py = fth_dir.join("main.py");
     if !main_py.exists() {
         bail!(
@@ -149,9 +144,7 @@ fn print_apply_instructions(json_path: &Path, game_dir: &Path, lang: &str) {
         "\nTranslation data downloaded.  To apply it, run FrontierTextHandler:\n\n  {}\n",
         apply_command(json_path, game_dir, lang)
     );
-    println!(
-        "Or pass --fth-dir <path/to/FrontierTextHandler> to apply automatically."
-    );
+    println!("Or pass --fth-dir <path/to/FrontierTextHandler> to apply automatically.");
 }
 
 fn apply_command(json_path: &Path, game_dir: &Path, lang: &str) -> String {
@@ -205,7 +198,10 @@ pub fn server_info(server: &str, local_version: Option<&str>) -> Result<()> {
 
     println!("Server:      {}", server);
     println!("Software:    {}", info.name);
-    println!("Client mode: {} (manifest ID: {})", info.client_mode, info.manifest_id);
+    println!(
+        "Client mode: {} (manifest ID: {})",
+        info.client_mode, info.manifest_id
+    );
 
     if let Some(local) = local_version {
         if local.to_ascii_lowercase() == info.manifest_id {
