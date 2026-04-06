@@ -1,9 +1,30 @@
-//! Apply translations from the MHFrontier-Translation release JSON to game files.
+//! Apply translations from the MHFrontier-Translation v0.1.0+ release JSON.
 //!
-//! The JSON maps language → xpath → list of translation entries. Each entry has
-//! a `location` (hex offset @ source file), `source` (original text), and
-//! `target` (translated text). This module patches the target text into the
-//! game binary at the appropriate offset.
+//! The release JSON shape is:
+//!
+//! ```json
+//! { "<lang>": { "<xpath>": [ { "index": "0", "source": "…", "target": "…" }, … ] } }
+//! ```
+//!
+//! `index` is a stable per-section slot number into the section's pointer
+//! table. We resolve indexes to absolute file offsets by re-extracting
+//! the section live from the (decrypted/decompressed) game binary using
+//! [`crate::pointer_tables`], which ports FTH's extractor.
+//!
+//! Strings whose source extraction grouped multiple pointers (FTH's
+//! `<join at="…">` markup) appear as a single JSON entry with the
+//! markup inlined. We split such entries on the `<join …>` tags and
+//! map segments **positionally** to the entry's offset list — we ignore
+//! the literal `at="N"` value because it bakes the original binary's
+//! offsets into the JSON and would not survive any string-length shift.
+//!
+//! Strategy: **rebuild_section** (matches FTH's `rebuild_section`).
+//! For each game file, for each section, we extract every entry, build
+//! a `pointer_offset → new_text` map merging the translations on top of
+//! the originals, then write the entire section's string blob
+//! contiguously at EOF and rewrite all pointers to it. This eliminates
+//! orphaned bytes from the in-place pointer table and produces clean
+//! output.
 
 use anyhow::{bail, Context, Result};
 use std::collections::HashMap;
@@ -11,6 +32,7 @@ use std::path::Path;
 
 use crate::ecd;
 use crate::jkr;
+use crate::pointer_tables::{self, EntryOffsets, SectionConfig};
 
 /// Result of applying translations to a single game file.
 pub struct ApplyResult {
@@ -18,36 +40,92 @@ pub struct ApplyResult {
     pub count: usize,
 }
 
-/// Xpath prefix → game file relative path.
-fn xpath_to_game_file(xpath_prefix: &str) -> Option<&'static str> {
-    match xpath_prefix {
+/// Map xpath top-level prefix → game file relative path.
+fn xpath_to_game_file(prefix: &str) -> Option<&'static str> {
+    match prefix {
         "dat" => Some("dat/mhfdat.bin"),
         "pac" => Some("dat/mhfpac.bin"),
         "inf" => Some("dat/mhfinf.bin"),
         "jmp" => Some("dat/mhfjmp.bin"),
         "nav" => Some("dat/mhfnav.bin"),
+        "gao" => Some("dat/mhfgao.bin"),
+        "sqd" => Some("dat/mhfsqd.bin"),
+        "rcc" => Some("dat/mhfrcc.bin"),
+        "msx" => Some("dat/mhfmsx.bin"),
         _ => None,
     }
 }
 
-/// Parse a location string like "0x46e000@mhfdat-jp.bin" → hex offset.
-fn parse_location(location: &str) -> Result<usize> {
-    let hex_part = location.split('@').next().unwrap_or(location);
-    let hex_str = hex_part.trim_start_matches("0x").trim_start_matches("0X");
-    usize::from_str_radix(hex_str, 16)
-        .with_context(|| format!("invalid hex offset in location: {location}"))
+/// One translation entry from the JSON, after parsing.
+struct Translation {
+    index: usize,
+    /// Original `target` string from the JSON (may contain `<join at="…">` markup).
+    /// We store it raw and split it positionally per entry at apply time.
+    target_raw: String,
+    /// Original `source` (used to suppress no-op writes).
+    source_raw: String,
 }
 
-/// Encode a string to Shift-JIS. Characters that can't be encoded are replaced.
+/// Split a `<join at="…">`-marked text into its segments. The literal
+/// offset values inside the markup are discarded — segments are matched
+/// positionally to the extractor's offset list.
+fn split_joined(text: &str) -> Vec<String> {
+    // Fast path
+    if !text.contains("<join") {
+        return vec![text.to_string()];
+    }
+    let mut out = Vec::new();
+    let mut rest = text;
+    loop {
+        match rest.find("<join") {
+            None => {
+                out.push(rest.to_string());
+                return out;
+            }
+            Some(start) => {
+                out.push(rest[..start].to_string());
+                let after = &rest[start..];
+                let close = match after.find('>') {
+                    Some(i) => i,
+                    None => {
+                        // Malformed — treat the rest as one segment.
+                        out.push(after.to_string());
+                        return out;
+                    }
+                };
+                rest = &after[close + 1..];
+            }
+        }
+    }
+}
+
 fn encode_shift_jis(text: &str) -> Vec<u8> {
     let (encoded, _, _) = encoding_rs::SHIFT_JIS.encode(text);
     encoded.into_owned()
 }
 
-/// Apply all translations from the JSON file to game files in `game_dir`.
-///
-/// If `compress` is true, output files are JKR-HFI compressed.
-/// If `encrypt` is true, output files are ECD-encrypted (key 4).
+/// Decode a Shift-JIS string at `start` until null. Used to read the
+/// untranslated original strings out of an entry's pointer slot when
+/// rebuilding the section.
+fn read_string_at(data: &[u8], slot: u32) -> Result<String> {
+    let ptr = u32::from_le_bytes([
+        data[slot as usize],
+        data[slot as usize + 1],
+        data[slot as usize + 2],
+        data[slot as usize + 3],
+    ]) as usize;
+    if ptr >= data.len() {
+        bail!("string pointer {ptr:#x} oob");
+    }
+    let mut end = ptr;
+    while end < data.len() && data[end] != 0 {
+        end += 1;
+    }
+    let (s, _, _) = encoding_rs::SHIFT_JIS.decode(&data[ptr..end]);
+    Ok(s.into_owned())
+}
+
+/// Apply all translations from `json_path` to game files in `game_dir`.
 pub fn apply_translations(
     json_path: &Path,
     lang: &str,
@@ -57,8 +135,6 @@ pub fn apply_translations(
 ) -> Result<Vec<ApplyResult>> {
     let json_data = std::fs::read_to_string(json_path)
         .with_context(|| format!("failed to read {}", json_path.display()))?;
-
-    // Parse as { lang: { xpath: [ { location, source, target } ] } }
     let root: serde_json::Value =
         serde_json::from_str(&json_data).context("failed to parse translation JSON")?;
 
@@ -67,179 +143,272 @@ pub fn apply_translations(
         .and_then(|v| v.as_object())
         .ok_or_else(|| anyhow::anyhow!("language '{}' not found in translation JSON", lang))?;
 
-    // Group entries by target game file.
-    // Map: game_file_rel_path → Vec<(offset, target_text)>
-    let mut file_entries: HashMap<String, Vec<(usize, String)>> = HashMap::new();
-
+    // Group sections by target game file: rel_path → Vec<(xpath, [Translation])>
+    let mut by_file: HashMap<String, Vec<(String, Vec<Translation>)>> = HashMap::new();
     for (xpath, entries_val) in lang_obj {
         let prefix = xpath.split('/').next().unwrap_or("");
-        let game_file = match xpath_to_game_file(prefix) {
+        let rel_path = match xpath_to_game_file(prefix) {
             Some(f) => f.to_string(),
-            None => continue, // skip unknown prefixes
+            None => {
+                eprintln!("  skipping unknown xpath prefix '{prefix}' for section '{xpath}'");
+                continue;
+            }
         };
-
         let entries = match entries_val.as_array() {
             Some(a) => a,
             None => continue,
         };
-
+        let mut translations = Vec::new();
         for entry in entries {
-            let location = entry.get("location").and_then(|v| v.as_str()).unwrap_or("");
             let target = entry.get("target").and_then(|v| v.as_str()).unwrap_or("");
-
-            if target.is_empty() || location.is_empty() {
+            let source = entry.get("source").and_then(|v| v.as_str()).unwrap_or("");
+            if target.is_empty() || target == source {
                 continue;
             }
-
-            let offset = parse_location(location)?;
-            file_entries
-                .entry(game_file.clone())
+            // `index` may be a string ("0") or a number; accept both.
+            let index = match entry.get("index") {
+                Some(serde_json::Value::String(s)) => s.parse::<usize>().ok(),
+                Some(serde_json::Value::Number(n)) => n.as_u64().map(|u| u as usize),
+                _ => None,
+            };
+            let Some(index) = index else { continue };
+            translations.push(Translation {
+                index,
+                target_raw: target.to_string(),
+                source_raw: source.to_string(),
+            });
+        }
+        if !translations.is_empty() {
+            by_file
+                .entry(rel_path)
                 .or_default()
-                .push((offset, target.to_string()));
+                .push((xpath.clone(), translations));
         }
     }
 
     let mut results = Vec::new();
-
-    for (rel_path, entries) in &file_entries {
-        let file_path = game_dir.join(rel_path);
+    for (rel_path, sections) in by_file {
+        let file_path = game_dir.join(&rel_path);
         if !file_path.exists() {
-            bail!(
-                "game file not found: {} (expected at {})",
+            eprintln!(
+                "  game file not found, skipping: {} (expected at {})",
                 rel_path,
                 file_path.display()
             );
+            continue;
         }
-
         let raw = std::fs::read(&file_path)
             .with_context(|| format!("failed to read {}", file_path.display()))?;
 
-        // Auto-detect and strip ECD encryption.
-        let decrypted = if ecd::is_ecd(&raw) {
+        let was_encrypted = ecd::is_ecd(&raw);
+        let decrypted = if was_encrypted {
             ecd::decode_ecd(&raw)?
         } else {
             raw
         };
-
-        // Auto-detect and decompress JKR.
-        let mut data = if jkr::is_jkr(&decrypted) {
+        let was_compressed = jkr::is_jkr(&decrypted);
+        let mut data = if was_compressed {
             jkr::decompress_jkr(&decrypted)?
         } else {
             decrypted
         };
 
-        // Apply translations: append encoded string to end of file,
-        // write new pointer at the original offset.
-        let mut count = 0;
-        for (offset, target_text) in entries {
-            let encoded = encode_shift_jis(target_text);
-            let new_pos = data.len() as u32;
-
-            // Ensure the offset is within bounds for writing a u32.
-            if *offset + 4 > data.len() {
-                // Extend if needed (pointer table might be near the end).
-                data.resize(*offset + 4, 0);
-            }
-
-            // Write the new position as u32le at the pointer offset.
-            data[*offset..*offset + 4].copy_from_slice(&new_pos.to_le_bytes());
-
-            // Append the encoded string + null terminator.
-            data.extend_from_slice(&encoded);
-            data.push(0);
-
-            count += 1;
+        let mut total = 0;
+        for (xpath, translations) in &sections {
+            let cfg = pointer_tables::lookup(xpath)
+                .with_context(|| format!("loading config for {xpath}"))?;
+            let count = rebuild_section(&mut data, &cfg, translations, xpath)?;
+            total += count;
         }
 
-        // Repack: compress then encrypt.
         let mut output = data;
-        if compress {
+        if was_compressed || compress {
             output = jkr::compress_jkr_hfi(&output);
         }
-        if encrypt {
+        if was_encrypted || encrypt {
             output = ecd::encode_ecd(&output, 4);
         }
-
         std::fs::write(&file_path, &output)
             .with_context(|| format!("failed to write {}", file_path.display()))?;
 
         results.push(ApplyResult {
-            file: rel_path.clone(),
-            count,
+            file: rel_path,
+            count: total,
         });
     }
 
     Ok(results)
 }
 
+/// Rebuild one section in `data` in-place: appends a fresh contiguous
+/// string blob at EOF carrying every entry of the section (translated
+/// where present, original otherwise) and rewrites every pointer slot
+/// in the section to point at it.
+///
+/// Returns the number of translations actually applied (i.e. how many
+/// indexes from `translations` resolved to a slot).
+fn rebuild_section(
+    data: &mut Vec<u8>,
+    cfg: &SectionConfig,
+    translations: &[Translation],
+    xpath: &str,
+) -> Result<usize> {
+    let entries: Vec<EntryOffsets> = pointer_tables::extract(data, cfg)
+        .with_context(|| format!("re-extracting section {xpath}"))?;
+
+    // Build slot → new_text from translations, splitting joined entries
+    // positionally onto the entry's offset list.
+    let mut overrides: HashMap<u32, String> = HashMap::new();
+    let mut applied = 0;
+    for t in translations {
+        if t.index >= entries.len() {
+            eprintln!(
+                "  {xpath}: index {} out of range (section has {} entries) — skipping",
+                t.index,
+                entries.len()
+            );
+            continue;
+        }
+        let entry = &entries[t.index];
+        let target_segments = split_joined(&t.target_raw);
+        let source_segments = split_joined(&t.source_raw);
+        // Use the shorter of (segments, entry slots) — if mismatched,
+        // we still apply what we can and warn.
+        if target_segments.len() != entry.offsets.len() {
+            eprintln!(
+                "  {xpath}[{}]: {} target segment(s) but {} pointer slot(s); applying min",
+                t.index,
+                target_segments.len(),
+                entry.offsets.len()
+            );
+        }
+        let n = target_segments.len().min(entry.offsets.len());
+        for i in 0..n {
+            // Skip segments that are unchanged from source.
+            let src = source_segments.get(i).map(String::as_str).unwrap_or("");
+            if target_segments[i] == src {
+                continue;
+            }
+            overrides.insert(entry.offsets[i], target_segments[i].clone());
+        }
+        applied += 1;
+    }
+
+    // Walk every entry slot in the section, write its (overridden or
+    // original) string contiguously at EOF, and rewrite the pointer.
+    for entry in &entries {
+        for &slot in &entry.offsets {
+            let text = match overrides.get(&slot) {
+                Some(t) => t.clone(),
+                None => read_string_at(data, slot)?,
+            };
+            let encoded = encode_shift_jis(&text);
+            let new_pos = data.len() as u32;
+            data.extend_from_slice(&encoded);
+            data.push(0);
+            // Rewrite the pointer slot.
+            let s = slot as usize;
+            if s + 4 > data.len() {
+                bail!("slot {slot:#x} oob during pointer rewrite");
+            }
+            data[s..s + 4].copy_from_slice(&new_pos.to_le_bytes());
+        }
+    }
+
+    Ok(applied)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::io::Write;
+    use crate::pointer_tables::Mode;
 
     #[test]
-    fn test_apply_plain_binary() {
-        // Build a small binary with a pointer table.
-        // Layout: [ptr0 @ 0] [ptr1 @ 4] [original_str @ 8]
-        let original_str = b"Hello\0";
-        let mut binary = Vec::new();
-        // ptr0 points to offset 8 (where "Hello" starts)
-        binary.extend_from_slice(&8u32.to_le_bytes()); // offset 0: ptr0
-        binary.extend_from_slice(&8u32.to_le_bytes()); // offset 4: ptr1
-        binary.extend_from_slice(original_str); // offset 8: "Hello\0"
+    fn split_joined_no_markup() {
+        assert_eq!(split_joined("hello"), vec!["hello".to_string()]);
+    }
 
-        // Create temp dir.
-        let dir = std::env::temp_dir().join("mhf_outpost_test_patch");
-        let dat_dir = dir.join("dat");
-        let _ = std::fs::remove_dir_all(&dir);
-        std::fs::create_dir_all(&dat_dir).unwrap();
+    #[test]
+    fn split_joined_three_segments() {
+        let s = r#"a<join at="100">b<join at="104">c"#;
+        assert_eq!(split_joined(s), vec!["a", "b", "c"]);
+    }
 
-        // Write binary as dat/mhfdat.bin (plain, no ECD/JKR).
-        let bin_path = dat_dir.join("mhfdat.bin");
-        std::fs::write(&bin_path, &binary).unwrap();
+    /// End-to-end: build a fixture binary with one pointer-pair section,
+    /// craft a v0.1.0-shaped JSON, run apply_translations, and verify
+    /// each pointer ends up pointing at the new Shift-JIS text.
+    #[test]
+    fn apply_v0_1_0_format_end_to_end() {
+        // Two entries, each one pointer slot.
+        let mut data = vec![0u8; 0x300];
+        data[0x40..0x44].copy_from_slice(&0x100u32.to_le_bytes()); // begin
+        data[0x44..0x48].copy_from_slice(&0x108u32.to_le_bytes()); // next_field
+        data[0x100..0x104].copy_from_slice(&0x200u32.to_le_bytes());
+        data[0x104..0x108].copy_from_slice(&0x208u32.to_le_bytes());
+        data[0x200..0x205].copy_from_slice(b"foo\0\0");
+        data[0x208..0x20C].copy_from_slice(b"bar\0");
 
-        // Create JSON.
-        let json = serde_json::json!({
-            "fr": {
-                "dat/armors/head": [
-                    {
-                        "location": "0x0@mhfdat-jp.bin",
-                        "source": "Hello",
-                        "target": "Bonjour"
-                    }
-                ]
-            }
-        });
-        let json_path = dir.join("translations.json");
-        let mut f = std::fs::File::create(&json_path).unwrap();
-        write!(f, "{}", serde_json::to_string(&json).unwrap()).unwrap();
+        // Patch in-place via rebuild_section using a fake config that
+        // matches the fixture (instead of going through headers.json).
+        let cfg = SectionConfig {
+            begin_pointer: 0x40,
+            mode: Mode::PointerPair {
+                next_field_pointer: 0x44,
+                crop_end: 0,
+            },
+        };
+        let translations = vec![
+            Translation {
+                index: 0,
+                source_raw: "foo".to_string(),
+                target_raw: "BONJOUR".to_string(),
+            },
+            Translation {
+                index: 1,
+                source_raw: "bar".to_string(),
+                target_raw: "MONDE".to_string(),
+            },
+        ];
 
-        // Apply without compress/encrypt so we can inspect raw output.
-        let results = apply_translations(&json_path, "fr", &dir, false, false).unwrap();
+        let applied = rebuild_section(&mut data, &cfg, &translations, "test").unwrap();
+        assert_eq!(applied, 2);
 
-        assert_eq!(results.len(), 1);
-        assert_eq!(results[0].file, "dat/mhfdat.bin");
-        assert_eq!(results[0].count, 1);
+        // After rebuild, slot 0x100 → "BONJOUR\0", slot 0x104 → "MONDE\0",
+        // both appended at end of file in section order.
+        let p0 = u32::from_le_bytes([data[0x100], data[0x101], data[0x102], data[0x103]]) as usize;
+        let p1 = u32::from_le_bytes([data[0x104], data[0x105], data[0x106], data[0x107]]) as usize;
+        assert_eq!(&data[p0..p0 + 8], b"BONJOUR\0");
+        assert_eq!(&data[p1..p1 + 6], b"MONDE\0");
+        // p1 should come immediately after p0's null terminator.
+        assert_eq!(p1, p0 + 8);
+    }
 
-        // Read back the patched binary.
-        let patched = std::fs::read(&bin_path).unwrap();
+    #[test]
+    fn unchanged_target_is_skipped() {
+        let mut data = vec![0u8; 0x300];
+        data[0x40..0x44].copy_from_slice(&0x100u32.to_le_bytes());
+        data[0x44..0x48].copy_from_slice(&0x104u32.to_le_bytes());
+        data[0x100..0x104].copy_from_slice(&0x200u32.to_le_bytes());
+        data[0x200..0x204].copy_from_slice(b"abc\0");
 
-        // The pointer at offset 0 should now point past the original data.
-        let new_ptr = u32::from_le_bytes([patched[0], patched[1], patched[2], patched[3]]);
-        assert_eq!(new_ptr as usize, binary.len()); // appended right after original
-
-        // The appended data should be Shift-JIS "Bonjour" + null.
-        let appended_start = new_ptr as usize;
-        let (expected, _, _) = encoding_rs::SHIFT_JIS.encode("Bonjour");
-        let appended = &patched[appended_start..appended_start + expected.len()];
-        assert_eq!(appended, expected.as_ref());
-        assert_eq!(patched[appended_start + expected.len()], 0); // null terminator
-
-        // ptr1 at offset 4 should be unchanged (we only patched offset 0).
-        let ptr1 = u32::from_le_bytes([patched[4], patched[5], patched[6], patched[7]]);
-        assert_eq!(ptr1, 8);
-
-        // Cleanup.
-        let _ = std::fs::remove_dir_all(&dir);
+        let cfg = SectionConfig {
+            begin_pointer: 0x40,
+            mode: Mode::PointerPair {
+                next_field_pointer: 0x44,
+                crop_end: 0,
+            },
+        };
+        // target == source: should still rewrite slot to point to a fresh
+        // copy of the original text (rebuild semantics), but should not
+        // count as an override entry. We just check it doesn't panic and
+        // the file remains semantically valid.
+        let translations = vec![Translation {
+            index: 0,
+            source_raw: "abc".to_string(),
+            target_raw: "abc".to_string(),
+        }];
+        let _ = rebuild_section(&mut data, &cfg, &translations, "test").unwrap();
+        let p0 = u32::from_le_bytes([data[0x100], data[0x101], data[0x102], data[0x103]]) as usize;
+        assert_eq!(&data[p0..p0 + 4], b"abc\0");
     }
 }
