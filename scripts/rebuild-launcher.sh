@@ -36,7 +36,11 @@ fi
 echo "Building mhf-iel-cli.exe from $VENDOR …"
 (
   cd "$VENDOR"
+  # --xwin-arch x86 is required because the target is 32-bit Windows;
+  # cargo-xwin defaults to x86_64 and would otherwise produce a splat
+  # without kernel32.lib / ntdll.lib / etc. for the x86 SDK.
   cargo xwin build \
+    --xwin-arch x86 \
     --package mhf-iel-cli \
     --target i686-pc-windows-msvc \
     --release
