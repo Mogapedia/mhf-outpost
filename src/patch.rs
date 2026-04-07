@@ -99,8 +99,51 @@ fn split_joined(text: &str) -> Vec<String> {
     }
 }
 
+/// Transliterate characters that have no Shift-JIS representation into
+/// ASCII-ish equivalents. The MHF font has no glyphs for accented Latin
+/// letters, so without this step `encoding_rs` would emit HTML numeric
+/// character references (e.g. `é` → `&#233;`) which render literally
+/// in-game. This is a lossy fallback for the official clients; a proper
+/// custom font/codepage would be needed to keep the accents.
+fn transliterate_for_sjis(text: &str) -> String {
+    text.chars()
+        .map(|c| match c {
+            'À' | 'Á' | 'Â' | 'Ã' | 'Ä' | 'Å' => "A".to_string(),
+            'à' | 'á' | 'â' | 'ã' | 'ä' | 'å' => "a".to_string(),
+            'Æ' => "AE".to_string(),
+            'æ' => "ae".to_string(),
+            'Ç' => "C".to_string(),
+            'ç' => "c".to_string(),
+            'È' | 'É' | 'Ê' | 'Ë' => "E".to_string(),
+            'è' | 'é' | 'ê' | 'ë' => "e".to_string(),
+            'Ì' | 'Í' | 'Î' | 'Ï' => "I".to_string(),
+            'ì' | 'í' | 'î' | 'ï' => "i".to_string(),
+            'Ñ' => "N".to_string(),
+            'ñ' => "n".to_string(),
+            'Ò' | 'Ó' | 'Ô' | 'Õ' | 'Ö' | 'Ø' => "O".to_string(),
+            'ò' | 'ó' | 'ô' | 'õ' | 'ö' | 'ø' => "o".to_string(),
+            'Œ' => "OE".to_string(),
+            'œ' => "oe".to_string(),
+            'Ù' | 'Ú' | 'Û' | 'Ü' => "U".to_string(),
+            'ù' | 'ú' | 'û' | 'ü' => "u".to_string(),
+            'Ý' | 'Ÿ' => "Y".to_string(),
+            'ý' | 'ÿ' => "y".to_string(),
+            'ß' => "ss".to_string(),
+            '«' | '»' => "\"".to_string(),
+            '‹' | '›' => "'".to_string(),
+            '“' | '”' | '„' => "\"".to_string(),
+            '‘' | '’' | '‚' => "'".to_string(),
+            '–' | '—' => "-".to_string(),
+            '…' => "...".to_string(),
+            ' ' => " ".to_string(), // non-breaking space → regular space
+            other => other.to_string(),
+        })
+        .collect()
+}
+
 fn encode_shift_jis(text: &str) -> Vec<u8> {
-    let (encoded, _, _) = encoding_rs::SHIFT_JIS.encode(text);
+    let translit = transliterate_for_sjis(text);
+    let (encoded, _, _) = encoding_rs::SHIFT_JIS.encode(&translit);
     encoded.into_owned()
 }
 
