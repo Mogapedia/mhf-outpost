@@ -10,14 +10,13 @@ use std::path::Path;
 // separate i686-pc-windows-msvc executable must exist on disk and be
 // exec'd (under Wine on Linux).
 //
-// We bundle a prebuilt copy in `resources/` and write it to the game folder
-// on demand. To refresh it, build mhf-iel from `../mhf-iel`:
+// The authoritative source lives in `vendor/mhf-iel/` (a frozen, vendored
+// copy of the upstream `rockisch/mhf-iel` repo — see its README for details).
+// We bundle a prebuilt copy in `resources/` so that ordinary `cargo build`
+// requires no Windows cross-compile toolchain. To regenerate the binary
+// after editing `vendor/mhf-iel/`:
 //
-//     cd ../mhf-iel
-//     cargo xwin build --package mhf-iel-cli \
-//         --target i686-pc-windows-msvc --release
-//     cp target/i686-pc-windows-msvc/release/mhf-iel-cli.exe \
-//         ../mhf-outpost/resources/
+//     ./scripts/rebuild-launcher.sh
 //
 // Authentication (previously `mhf-iel-auth.exe`) is implemented in pure Rust
 // in `auth.rs` and does not need a sidecar binary.
