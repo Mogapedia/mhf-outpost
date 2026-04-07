@@ -138,7 +138,7 @@ pub fn game_dir_checks(path: &Path) -> Vec<Check> {
         checks.push(Check::warn(
             "mhf-iel (launcher)",
             "not found — game will require Internet Explorer to launch",
-            "Download mhf-iel-cli.exe from the mhf-iel releases and place it in the game folder",
+            "Run `mhf-outpost extract-launcher --path <game_dir>` to write the bundled mhf-iel-cli.exe",
         ));
     }
 

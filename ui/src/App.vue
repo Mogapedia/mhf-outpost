@@ -256,8 +256,8 @@ async function launchGame() {
 async function fetchLauncher() {
   if (!selectedPath.value) return
   try {
-    await invoke('fetch_launcher', { path: selectedPath.value })
-    showToast('Launcher binaries downloaded')
+    await invoke('extract_launcher', { path: selectedPath.value })
+    showToast('Launcher binary extracted')
   } catch (e: any) {
     showToast(e, 'err')
   }

@@ -5,6 +5,7 @@ mod jkr;
 mod launcher;
 mod manifest;
 mod patch;
+mod pointer_tables;
 mod translate;
 mod verify;
 
@@ -38,23 +39,26 @@ enum Command {
     /// List all known game versions and their manifest status.
     List,
 
-    /// Download mhf-iel-cli.exe and mhf-iel-auth.exe from the latest GitHub release.
-    FetchLauncher {
-        /// Game directory to place the launcher binaries in.
+    /// Write the bundled mhf-iel-cli.exe into the game folder.
+    ///
+    /// The launcher binary is embedded in mhf-outpost at build time — no
+    /// network access is required.
+    ExtractLauncher {
+        /// Game directory to place the launcher binary in.
         #[arg(short, long)]
         path: PathBuf,
     },
 
     /// Launch the game via mhf-iel-cli.exe (Wine on Linux).
     ///
-    /// If config.json is missing or the session token is absent, runs
-    /// mhf-iel-auth first to authenticate and generate the config.
+    /// Requires a valid `config.json` produced by the in-app authenticator
+    /// (see `auth.rs`); pass `--auth` to force re-authentication first.
     Launch {
         /// Game directory containing mhf-iel-cli.exe and config.json.
         #[arg(short, long)]
         path: PathBuf,
 
-        /// Force running mhf-iel-auth before launching (re-authenticate).
+        /// Force re-authentication before launching.
         #[arg(long)]
         auth: bool,
     },
@@ -193,7 +197,7 @@ fn main() -> Result<()> {
     let cli = Cli::parse();
     match cli.command {
         Command::Check { path } => cmd_check(path.as_deref()),
-        Command::FetchLauncher { path } => launcher::fetch_launcher(&path),
+        Command::ExtractLauncher { path } => launcher::extract_launcher(&path),
         Command::Launch { path, auth } => launcher::launch(&path, auth),
         Command::AvExclude { path } => launcher::av_exclude(&path),
         Command::Download {

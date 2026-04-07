@@ -11,7 +11,7 @@ pub fn run() {
             commands::verify_version,
             commands::download_version,
             commands::launch_game,
-            commands::fetch_launcher,
+            commands::extract_launcher,
             commands::av_exclude,
             commands::authenticate,
             commands::select_character,

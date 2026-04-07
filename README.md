@@ -13,7 +13,7 @@ Built with [Tauri 2](https://tauri.app) (Rust backend) and Vue 3 (frontend).
 - Resume interrupted downloads
 - Server tab independent of game version — authenticate once, play any installed version
 - Login, register, and character selection against any Erupe-compatible server
-- Downloads `mhf-iel-cli.exe` from GitHub releases automatically
+- Bundles `mhf-iel-cli.exe` directly in the binary — no network fetch, no GitHub dependency
 - System check: DirectX 9 / Wine + DXVK, Japanese fonts, game directory health
 - Windows Defender exclusion helper
 - Cross-platform: Windows (native), Linux (Wine)

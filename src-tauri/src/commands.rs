@@ -231,9 +231,9 @@ pub async fn launch_game(path: String, auth: bool) -> Result<(), String> {
 }
 
 #[tauri::command]
-pub async fn fetch_launcher(path: String) -> Result<(), String> {
+pub async fn extract_launcher(path: String) -> Result<(), String> {
     tauri::async_runtime::spawn_blocking(move || {
-        launcher::fetch_launcher(std::path::Path::new(&path))
+        launcher::extract_launcher(std::path::Path::new(&path))
     })
     .await
     .map_err(|e| e.to_string())?

@@ -1,121 +1,62 @@
 use anyhow::{bail, Context, Result};
-use indicatif::{ProgressBar, ProgressStyle};
-use serde::Deserialize;
-use std::io::Write;
 use std::path::Path;
-use std::time::Duration;
 
-const REQUEST_TIMEOUT: Duration = Duration::from_secs(30);
+// ── Embedded launcher binary ──────────────────────────────────────────────────
+//
+// `mhf-iel-cli.exe` is a 32-bit Windows binary that loads `mhfo-hd.dll` into
+// its own process and calls `mhDLL_Main` with a hand-built data struct of
+// in-process Win32 handles. Because mhf-outpost is built for the host's
+// native target (typically x86_64), it cannot host that DLL itself — a
+// separate i686-pc-windows-msvc executable must exist on disk and be
+// exec'd (under Wine on Linux).
+//
+// We bundle a prebuilt copy in `resources/` and write it to the game folder
+// on demand. To refresh it, build mhf-iel from `../mhf-iel`:
+//
+//     cd ../mhf-iel
+//     cargo xwin build --package mhf-iel-cli \
+//         --target i686-pc-windows-msvc --release
+//     cp target/i686-pc-windows-msvc/release/mhf-iel-cli.exe \
+//         ../mhf-outpost/resources/
+//
+// Authentication (previously `mhf-iel-auth.exe`) is implemented in pure Rust
+// in `auth.rs` and does not need a sidecar binary.
+const MHF_IEL_CLI_EXE: &[u8] = include_bytes!("../resources/mhf-iel-cli.exe");
 
-/// We maintain mhf-iel-cli ourselves; only the CLI launcher binary is needed.
-/// Authentication (previously mhf-iel-auth) is now built into mhf-outpost.
-const GITHUB_API: &str = "https://api.github.com/repos/rockisch/mhf-iel/releases/latest";
-
-// ── GitHub release fetching ───────────────────────────────────────────────────
-
-#[derive(Deserialize)]
-struct Release {
-    tag_name: String,
-    assets: Vec<Asset>,
-}
-
-#[derive(Deserialize)]
-struct Asset {
-    name: String,
-    browser_download_url: String,
-    size: u64,
-}
-
-/// Download mhf-iel-cli.exe and mhf-iel-auth.exe into `dest`.
-pub fn fetch_launcher(dest: &Path) -> Result<()> {
-    let client = reqwest::blocking::Client::builder()
-        .user_agent("mhf-outpost/0.1")
-        .timeout(REQUEST_TIMEOUT)
-        .build()?;
-
-    println!("Fetching latest mhf-iel release from GitHub…");
-    let release: Release = client
-        .get(GITHUB_API)
-        .send()
-        .context("failed to reach GitHub API")?
-        .json()
-        .context("failed to parse GitHub release JSON")?;
-
-    println!("Latest release: {}", release.tag_name);
-
-    // Only the CLI launcher is needed; authentication is now built into mhf-outpost.
-    let wanted = ["mhf-iel-cli.exe"];
-    let mut found = 0u32;
-
+/// Write the bundled `mhf-iel-cli.exe` into `dest`. Skips the write if the
+/// file is already present and byte-identical.
+pub fn extract_launcher(dest: &Path) -> Result<()> {
     std::fs::create_dir_all(dest).with_context(|| format!("cannot create '{}'", dest.display()))?;
 
-    for name in wanted {
-        let asset = release.assets.iter().find(|a| a.name == name);
-        match asset {
-            None => println!("  ⚠ {name} not found in release assets — skipping"),
-            Some(a) => {
-                let out = dest.join(name);
-                download_asset(&client, a, &out)?;
-                found += 1;
-            }
+    let out = dest.join("mhf-iel-cli.exe");
+    let up_to_date = std::fs::read(&out)
+        .map(|existing| existing == MHF_IEL_CLI_EXE)
+        .unwrap_or(false);
+
+    if up_to_date {
+        println!("  mhf-iel-cli.exe already up to date");
+    } else {
+        std::fs::write(&out, MHF_IEL_CLI_EXE)
+            .with_context(|| format!("cannot write '{}'", out.display()))?;
+        println!("  ✓ wrote mhf-iel-cli.exe ({} bytes)", MHF_IEL_CLI_EXE.len());
+
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::PermissionsExt;
+            let mut perms = std::fs::metadata(&out)?.permissions();
+            perms.set_mode(0o755);
+            let _ = std::fs::set_permissions(&out, perms);
         }
     }
 
-    if found == 0 {
-        bail!("mhf-iel-cli.exe not found in release {}", release.tag_name);
-    }
-
-    println!(
-        "\nPlace mhf-iel-cli.exe in your MHF game folder, then authenticate via the launcher UI."
-    );
-    Ok(())
-}
-
-fn download_asset(client: &reqwest::blocking::Client, asset: &Asset, dest: &Path) -> Result<()> {
-    use std::io::Read;
-
-    // Skip if already present and correct size.
-    if dest.metadata().map(|m| m.len()).unwrap_or(0) == asset.size {
-        println!("  {} already up to date", asset.name);
-        return Ok(());
-    }
-
-    let pb = ProgressBar::new(asset.size);
-    pb.set_style(
-        ProgressStyle::with_template(&format!(
-            "  {{spinner:.cyan}} {{bar:30.cyan/blue}} {{bytes}}/{{total_bytes}}  {}",
-            asset.name
-        ))
-        .unwrap()
-        .progress_chars("=>-"),
-    );
-
-    let mut resp = client
-        .get(&asset.browser_download_url)
-        .send()
-        .with_context(|| format!("failed to download {}", asset.name))?;
-
-    let mut file = std::fs::File::create(dest)
-        .with_context(|| format!("cannot create '{}'", dest.display()))?;
-
-    let mut buf = vec![0u8; 64 * 1024];
-    loop {
-        let n = resp.read(&mut buf)?;
-        if n == 0 {
-            break;
-        }
-        file.write_all(&buf[..n])?;
-        pb.inc(n as u64);
-    }
-    pb.finish_and_clear();
-    println!("  ✓ {}", asset.name);
+    println!("\nAuthenticate via the launcher UI to generate config.json, then launch.");
     Ok(())
 }
 
 // ── Launch ────────────────────────────────────────────────────────────────────
 
 /// Launch the game. If `auth_first` is true, or config.json is missing/stale,
-/// run mhf-iel-auth to (re-)authenticate before launching.
+/// re-authenticate via the in-app auth flow before launching.
 pub fn launch(game_dir: &Path, auth_first: bool) -> Result<()> {
     let config_path = game_dir.join("config.json");
     let cli_exe = game_dir.join("mhf-iel-cli.exe");
@@ -134,7 +75,7 @@ pub fn launch(game_dir: &Path, auth_first: bool) -> Result<()> {
     if !cli_exe.exists() {
         bail!(
             "mhf-iel-cli.exe not found in '{}'\n\
-             Run: mhf-outpost fetch-launcher --path {}",
+             Run: mhf-outpost extract-launcher --path {}",
             game_dir.display(),
             game_dir.display()
         );
