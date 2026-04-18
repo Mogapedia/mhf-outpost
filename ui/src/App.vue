@@ -307,12 +307,9 @@ async function runChecks() {
 
 <template>
   <div class="layout">
-    <!-- Sidebar -->
-    <aside class="sidebar">
-      <div class="sidebar-header">
-        <span class="brand">MHF Launcher</span>
-      </div>
-
+    <!-- Top bar: brand + global tabs span the whole window -->
+    <header class="top-bar">
+      <span class="brand">MHF Launcher</span>
       <nav class="nav-tabs">
         <button :class="['nav-tab', view === 'library' ? 'active' : '']" @click="view = 'library'">
           Library
@@ -328,29 +325,32 @@ async function runChecks() {
           Checks
         </button>
       </nav>
+    </header>
 
-      <div class="version-list" v-if="view === 'library'">
-        <button
-          v-for="v in versions"
-          :key="v.id"
-          :class="['version-card', v.id === selectedId ? 'selected' : '', installedPaths[v.id] ? 'installed' : '']"
-          @click="selectedId = v.id"
-        >
-          <div class="vc-header">
-            <span class="vc-name">{{ v.name }}</span>
-            <span class="vc-badge" v-if="installedPaths[v.id]">&#10003;</span>
-            <span class="vc-badge dl" v-else-if="downloading[v.id]">&#x2193;</span>
-          </div>
-          <div class="vc-platform">{{ v.platform }}</div>
-          <div class="vc-progress" v-if="downloading[v.id]">
-            <div class="vc-progress-bar" :style="{ width: downloading[v.id].progress + '%' }"></div>
-          </div>
-        </button>
-      </div>
-    </aside>
+    <!-- Body: version sidebar (Library only) + content -->
+    <div class="body">
+      <aside class="sidebar" v-if="view === 'library'">
+        <div class="version-list">
+          <button
+            v-for="v in versions"
+            :key="v.id"
+            :class="['version-card', v.id === selectedId ? 'selected' : '', installedPaths[v.id] ? 'installed' : '']"
+            @click="selectedId = v.id"
+          >
+            <div class="vc-header">
+              <span class="vc-name">{{ v.name }}</span>
+              <span class="vc-badge" v-if="installedPaths[v.id]">&#10003;</span>
+              <span class="vc-badge dl" v-else-if="downloading[v.id]">&#x2193;</span>
+            </div>
+            <div class="vc-platform">{{ v.platform }}</div>
+            <div class="vc-progress" v-if="downloading[v.id]">
+              <div class="vc-progress-bar" :style="{ width: downloading[v.id].progress + '%' }"></div>
+            </div>
+          </button>
+        </div>
+      </aside>
 
-    <!-- Main content -->
-    <main class="content">
+      <main class="content">
 
       <!-- Library view: version detail -->
       <div class="detail-pane" v-if="view === 'library' && selected">
@@ -546,9 +546,9 @@ async function runChecks() {
       <div class="trans-pane" v-if="view === 'translations'">
         <h1>Translations</h1>
         <p class="trans-desc">
-          Download community translations from GitHub. The translation data
-          (JSON) is saved into your game directory and can be applied with
-          <strong>FrontierTextHandler</strong>.
+          Download and apply community translations directly to your game
+          files. mhf-outpost handles decompression, pointer patching and
+          re-encryption in one step — no external tools required.
         </p>
 
         <div class="section">
@@ -564,16 +564,21 @@ async function runChecks() {
             <label class="section-label">Language</label>
             <input class="input" v-model="transLang" placeholder="fr" @change="saveTransPrefs" />
           </div>
-          <div class="trans-field">
-            <label class="section-label">Repository</label>
-            <input class="input" v-model="transRepo" @change="saveTransPrefs" />
-          </div>
         </div>
+
+        <details class="trans-advanced">
+          <summary>Advanced</summary>
+          <div class="trans-field">
+            <label class="section-label">Source repository</label>
+            <input class="input" v-model="transRepo" @change="saveTransPrefs" />
+            <p class="field-hint">GitHub owner/repo hosting the translation releases. Change only if you're testing a fork.</p>
+          </div>
+        </details>
 
         <div class="actions">
           <button class="btn-primary" @click="downloadTranslations"
                   :disabled="transLoading || !selectedPath">
-            {{ transLoading ? 'Downloading…' : 'Download translations' }}
+            {{ transLoading ? 'Downloading & applying…' : 'Download & apply translations' }}
           </button>
         </div>
 
@@ -581,11 +586,9 @@ async function runChecks() {
           <div class="check-row ok">
             <div class="check-icon">&#10003;</div>
             <div class="check-body">
-              <div class="check-name">Translation data saved</div>
-              <div class="check-detail">{{ transResult.json_path }}</div>
-              <div class="check-fix">
-                Apply with FrontierTextHandler:<br/>
-                <code>python main.py {{ transResult.json_path }} --apply-translations --lang {{ transLang }} --game-dir {{ selectedPath }} --compress --encrypt</code>
+              <div class="check-name">Translations applied</div>
+              <div class="check-detail">
+                Release <strong>{{ transResult.release_tag }}</strong> — payload saved to <code>{{ transResult.json_path }}</code>
               </div>
             </div>
           </div>
@@ -640,7 +643,8 @@ async function runChecks() {
         </div>
       </div>
 
-    </main>
+      </main>
+    </div>
 
     <!-- Toast -->
     <div :class="['toast', toast?.type]" v-if="toast">{{ toast.text }}</div>
@@ -649,28 +653,25 @@ async function runChecks() {
 
 <style scoped>
 .layout {
-  display: flex;
+  display: grid;
+  grid-template-rows: auto 1fr;
   height: 100vh;
   overflow: hidden;
 }
 
-/* ── Sidebar ── */
-.sidebar {
-  width: 240px;
-  min-width: 200px;
-  background: var(--bg-panel);
-  border-right: 1px solid var(--border);
+/* ── Top bar ── */
+.top-bar {
   display: flex;
-  flex-direction: column;
-  overflow: hidden;
-}
-
-.sidebar-header {
-  padding: 18px 16px 12px;
+  align-items: stretch;
+  gap: 32px;
+  padding-left: 20px;
+  background: var(--bg-panel);
   border-bottom: 1px solid var(--border);
 }
 
 .brand {
+  display: flex;
+  align-items: center;
   font-size: 15px;
   font-weight: 700;
   letter-spacing: .04em;
@@ -680,12 +681,11 @@ async function runChecks() {
 
 .nav-tabs {
   display: flex;
-  border-bottom: 1px solid var(--border);
+  align-self: stretch;
 }
 
 .nav-tab {
-  flex: 1;
-  padding: 9px 0;
+  padding: 14px 22px;
   background: transparent;
   color: var(--text-dim);
   font-size: 12px;
@@ -694,6 +694,23 @@ async function runChecks() {
   text-transform: uppercase;
   transition: color .15s, background .15s;
   position: relative;
+}
+
+/* ── Body (sidebar + content) ── */
+.body {
+  display: flex;
+  overflow: hidden;
+}
+
+/* ── Sidebar (version list; Library only) ── */
+.sidebar {
+  width: 240px;
+  min-width: 200px;
+  background: var(--bg-panel);
+  border-right: 1px solid var(--border);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
 }
 
 .nav-tab.active, .nav-tab:hover {
@@ -1098,6 +1115,23 @@ async function runChecks() {
   display: flex;
   flex-direction: column;
   gap: 4px;
+}
+.trans-advanced {
+  border-top: 1px solid var(--border);
+  padding-top: 12px;
+}
+.trans-advanced summary {
+  cursor: pointer;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-dim);
+  text-transform: uppercase;
+  letter-spacing: .03em;
+  padding: 4px 0;
+}
+.trans-advanced summary:hover { color: var(--text); }
+.trans-advanced .trans-field {
+  margin-top: 12px;
 }
 .trans-result {
   margin-top: 8px;
