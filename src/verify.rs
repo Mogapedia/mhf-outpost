@@ -265,6 +265,22 @@ fn progress_bar(size: u64, verb: &str) -> ProgressBar {
     pb
 }
 
+fn hash_with_progress_sha1(path: &Path, pb: &ProgressBar) -> Result<String, std::io::Error> {
+    let file = File::open(path)?;
+    let mut reader = BufReader::new(file);
+    let mut hasher = sha1::Sha1::new();
+    let mut buf = vec![0u8; BUF_SIZE];
+    loop {
+        let n = reader.read(&mut buf)?;
+        if n == 0 {
+            break;
+        }
+        Sha1Digest::update(&mut hasher, &buf[..n]);
+        pb.inc(n as u64);
+    }
+    Ok(hex::encode(Sha1Digest::finalize(hasher)))
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -335,20 +351,4 @@ mod tests {
         std::fs::remove_file(&p).ok();
         assert_eq!(a, b);
     }
-}
-
-fn hash_with_progress_sha1(path: &Path, pb: &ProgressBar) -> Result<String, std::io::Error> {
-    let file = File::open(path)?;
-    let mut reader = BufReader::new(file);
-    let mut hasher = sha1::Sha1::new();
-    let mut buf = vec![0u8; BUF_SIZE];
-    loop {
-        let n = reader.read(&mut buf)?;
-        if n == 0 {
-            break;
-        }
-        Sha1Digest::update(&mut hasher, &buf[..n]);
-        pb.inc(n as u64);
-    }
-    Ok(hex::encode(Sha1Digest::finalize(hasher)))
 }
