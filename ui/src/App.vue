@@ -133,6 +133,15 @@ function savePaths() {
   localStorage.setItem('installedPaths', JSON.stringify(installedPaths.value))
 }
 
+// The version the user most recently launched. Drives the top-bar Play button
+// so returning users hit "Play" from anywhere without going through Library.
+// Null on first run (no button shown).
+const lastPlayedId = ref<string | null>(localStorage.getItem('lastPlayedId'))
+function saveLastPlayed(id: string) {
+  lastPlayedId.value = id
+  localStorage.setItem('lastPlayedId', id)
+}
+
 // System checks
 const checks = ref<CheckItem[]>([])
 const checksLoading = ref(false)
@@ -282,6 +291,20 @@ const isInstalled = computed(() => !!selectedPath.value)
 const isDownloading = computed(() => selectedId.value ? !!downloading.value[selectedId.value] : false)
 const isAuthenticated = computed(() => authStep.value === 'done' && !!activeChar.value)
 
+// Quick-play (top-bar Play button).
+// Resolves the Version object for lastPlayedId, forgetting it if the user has
+// since wiped the install. `quickPlayReady` only turns true once the session
+// is also authenticated — otherwise clicking jumps to the Server tab.
+const lastPlayed = computed<Version | null>(() => {
+  if (!lastPlayedId.value) return null
+  const v = versions.value.find(x => x.id === lastPlayedId.value) ?? null
+  if (v && !installedPaths.value[v.id]) return null
+  return v
+})
+const quickPlayReady = computed(() =>
+  !!lastPlayed.value && isAuthenticated.value && !downloading.value[lastPlayed.value.id]
+)
+
 // ── Lifecycle ────────────────────────────────────────────────────────────────
 
 onMounted(async () => {
@@ -337,6 +360,8 @@ async function launchGame() {
     return
   }
 
+  saveLastPlayed(selectedId.value)
+
   try {
     await invoke('launch_game_authed', {
       path: selectedPath.value,
@@ -348,6 +373,20 @@ async function launchGame() {
   } catch (e: any) {
     showToast(e, 'err')
   }
+}
+
+/// Top-bar quick-play: re-select the last-played version so Library shows the
+/// right detail pane if the user navigates back, then launch. If auth has
+/// expired (session is in-memory only) we jump to Server instead.
+async function quickPlay() {
+  if (!lastPlayed.value) return
+  selectedId.value = lastPlayed.value.id
+  if (!isAuthenticated.value || !activeChar.value || !authSession.value) {
+    view.value = 'server'
+    showToast('Sign in to launch', 'err')
+    return
+  }
+  await launchGame()
 }
 
 async function fetchLauncher() {
@@ -422,6 +461,19 @@ async function runChecks() {
           Checks
         </button>
       </nav>
+      <!-- Quick-play: visible once the user has launched at least once -->
+      <button
+        v-if="lastPlayed"
+        class="quick-play"
+        :class="{ ready: quickPlayReady }"
+        :disabled="!!downloading[lastPlayed.id]"
+        :title="quickPlayReady ? `Launch ${lastPlayed.name}` : 'Sign in to launch'"
+        @click="quickPlay"
+      >
+        <span class="qp-icon">&#x25B6;</span>
+        <span class="qp-label">Play</span>
+        <span class="qp-version">{{ lastPlayed.name }}</span>
+      </button>
     </header>
 
     <!-- Body: version sidebar (Library only) + content -->
@@ -849,6 +901,49 @@ async function runChecks() {
 .nav-tabs {
   display: flex;
   align-self: stretch;
+}
+
+/* Quick-play button: pushed to the right edge of the top bar. */
+.quick-play {
+  margin-left: auto;
+  align-self: center;
+  margin-right: 12px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 16px;
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  color: var(--text-dim);
+  font-weight: 700;
+  font-size: 13px;
+  cursor: pointer;
+  transition: background .15s, border-color .15s, color .15s, transform .1s;
+}
+.quick-play:hover:not(:disabled) { border-color: var(--text-dim); color: var(--text); }
+.quick-play:active:not(:disabled) { transform: translateY(1px); }
+.quick-play:disabled { opacity: .45; cursor: not-allowed; }
+
+/* Ready (installed + authenticated): promoted to primary CTA. */
+.quick-play.ready {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: #1a1400;
+}
+.quick-play.ready:hover:not(:disabled) {
+  background: #e0b850;
+  border-color: #e0b850;
+  color: #1a1400;
+}
+
+.qp-icon    { font-size: 11px; }
+.qp-label   { letter-spacing: .04em; text-transform: uppercase; }
+.qp-version {
+  font-weight: 500;
+  opacity: .8;
+  padding-left: 8px;
+  border-left: 1px solid currentColor;
 }
 
 .nav-tab {
