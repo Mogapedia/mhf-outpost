@@ -67,6 +67,64 @@ const versions = ref<Version[]>([])
 const selectedId = ref<string | null>(null)
 const view = ref<'library' | 'server' | 'translations' | 'checks'>('library')
 
+// Sidebar generation groups: Z and G open by default; older tiers collapsed.
+const openGroups = ref<Record<string, boolean>>({
+  Z: true, G: true, Forward: false, Season: false, Other: false,
+})
+function toggleGroup(key: string) {
+  openGroups.value[key] = !openGroups.value[key]
+}
+
+/// Animate `<Transition>` enter by expanding height from 0 to scrollHeight.
+/// We bypass CSS classes (:css="false") because the natural height is
+/// content-dependent and can't be expressed in a static stylesheet.
+const GROUP_ANIM_MS = 180
+function onGroupEnter(el: Element, done: () => void) {
+  const e = el as HTMLElement
+  e.style.overflow = 'hidden'
+  e.style.height = '0px'
+  e.style.opacity = '0'
+  // Force a reflow before measuring the final height, otherwise browsers
+  // batch the 0->auto transition and we get no animation.
+  const target = e.scrollHeight
+  requestAnimationFrame(() => {
+    e.style.transition = `height ${GROUP_ANIM_MS}ms ease, opacity ${GROUP_ANIM_MS}ms ease`
+    e.style.height = target + 'px'
+    e.style.opacity = '1'
+  })
+  const cleanup = () => {
+    e.style.transition = ''
+    e.style.height = ''
+    e.style.overflow = ''
+    e.style.opacity = ''
+    e.removeEventListener('transitionend', onEnd)
+    done()
+  }
+  const onEnd = (ev: TransitionEvent) => { if (ev.propertyName === 'height') cleanup() }
+  e.addEventListener('transitionend', onEnd)
+}
+function onGroupLeave(el: Element, done: () => void) {
+  const e = el as HTMLElement
+  e.style.overflow = 'hidden'
+  e.style.height = e.scrollHeight + 'px'
+  e.style.opacity = '1'
+  e.style.transition = `height ${GROUP_ANIM_MS}ms ease, opacity ${GROUP_ANIM_MS}ms ease`
+  requestAnimationFrame(() => {
+    e.style.height = '0px'
+    e.style.opacity = '0'
+  })
+  const cleanup = () => {
+    e.style.transition = ''
+    e.style.height = ''
+    e.style.overflow = ''
+    e.style.opacity = ''
+    e.removeEventListener('transitionend', onEnd)
+    done()
+  }
+  const onEnd = (ev: TransitionEvent) => { if (ev.propertyName === 'height') cleanup() }
+  e.addEventListener('transitionend', onEnd)
+}
+
 // Per-version installed paths (stored in localStorage)
 const installedPaths = ref<Record<string, string>>(
   JSON.parse(localStorage.getItem('installedPaths') || '{}')
@@ -370,47 +428,63 @@ async function runChecks() {
     <div class="body">
       <aside class="sidebar" v-if="view === 'library'">
         <div class="version-list">
-          <details
+          <div
             v-for="g in GENERATIONS"
             :key="g.key"
             class="gen-group"
-            :open="g.key === 'Z' || g.key === 'G'"
+            :class="{ open: openGroups[g.key] }"
             v-show="versionsByGroup[g.key].length > 0"
           >
-            <summary class="gen-summary">
+            <button
+              class="gen-summary"
+              type="button"
+              :aria-expanded="openGroups[g.key]"
+              @click="toggleGroup(g.key)"
+            >
+              <span class="gen-chevron" aria-hidden="true">&#9656;</span>
               <span class="gen-label">{{ g.label }}</span>
               <span class="gen-count">{{ versionsByGroup[g.key].length }}</span>
-            </summary>
-            <button
-              v-for="v in versionsByGroup[g.key]"
-              :key="v.id"
-              :class="[
-                'version-card',
-                v.id === selectedId ? 'selected' : '',
-                installedPaths[v.id] ? 'installed' : '',
-                !v.has_archive ? 'unavailable' : '',
-              ]"
-              @click="selectedId = v.id"
-            >
-              <div class="vc-header">
-                <span class="vc-name">{{ v.name }}</span>
-                <span class="vc-badge" v-if="installedPaths[v.id]">&#10003;</span>
-                <span class="vc-badge dl" v-else-if="downloading[v.id]">&#x2193;</span>
-                <span class="vc-badge missing" v-else-if="!v.has_archive" title="No archive source">?</span>
-              </div>
-              <div class="vc-meta">
-                <span v-if="v.released">{{ v.released }}</span>
-                <span v-else>{{ v.platform }}</span>
-              </div>
-              <div class="vc-progress" v-if="downloading[v.id]">
-                <div class="vc-progress-bar" :style="{ width: downloading[v.id].progress + '%' }"></div>
-              </div>
             </button>
-          </details>
+            <Transition
+              :css="false"
+              @enter="onGroupEnter"
+              @leave="onGroupLeave"
+            >
+              <div v-show="openGroups[g.key]" class="gen-body">
+                <button
+                  v-for="v in versionsByGroup[g.key]"
+                  :key="v.id"
+                  :class="[
+                    'version-card',
+                    v.id === selectedId ? 'selected' : '',
+                    installedPaths[v.id] ? 'installed' : '',
+                    !v.has_archive ? 'unavailable' : '',
+                  ]"
+                  @click="selectedId = v.id"
+                >
+                  <div class="vc-header">
+                    <span class="vc-name">{{ v.name }}</span>
+                    <span class="vc-badge" v-if="installedPaths[v.id]">&#10003;</span>
+                    <span class="vc-badge dl" v-else-if="downloading[v.id]">&#x2193;</span>
+                    <span class="vc-badge missing" v-else-if="!v.has_archive" title="No archive source">?</span>
+                  </div>
+                  <div class="vc-meta">
+                    <span v-if="v.released">{{ v.released }}</span>
+                    <span v-else>{{ v.platform }}</span>
+                  </div>
+                  <div class="vc-progress" v-if="downloading[v.id]">
+                    <div class="vc-progress-bar" :style="{ width: downloading[v.id].progress + '%' }"></div>
+                  </div>
+                </button>
+              </div>
+            </Transition>
+          </div>
         </div>
       </aside>
 
       <main class="content">
+        <Transition name="pane" mode="out-in">
+        <div :key="view" class="pane-slot">
 
       <!-- Library view: version detail -->
       <div class="detail-pane" v-if="view === 'library' && selected">
@@ -734,6 +808,8 @@ async function runChecks() {
         </div>
       </div>
 
+        </div>
+        </Transition>
       </main>
     </div>
 
@@ -842,6 +918,9 @@ async function runChecks() {
 }
 
 .gen-summary {
+  width: 100%;
+  background: transparent;
+  border: none;
   cursor: pointer;
   padding: 6px 10px;
   font-size: 11px;
@@ -851,16 +930,30 @@ async function runChecks() {
   color: var(--text-dim);
   display: flex;
   align-items: center;
-  justify-content: space-between;
+  gap: 6px;
   border-radius: 4px;
   user-select: none;
+  text-align: left;
 }
 .gen-summary:hover { background: var(--bg-hover); color: var(--text); }
-.gen-summary::-webkit-details-marker { display: none; }
-.gen-summary::marker { content: ''; }
-.gen-group[open] .gen-summary { color: var(--text); }
+.gen-group.open .gen-summary { color: var(--text); }
+
+.gen-chevron {
+  display: inline-block;
+  font-size: 9px;
+  color: var(--text-dim);
+  transition: transform 180ms ease;
+}
+.gen-group.open .gen-chevron { transform: rotate(90deg); }
+
+.gen-body {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
 
 .gen-count {
+  margin-left: auto;
   font-size: 10px;
   font-weight: 600;
   color: var(--text-dim);
@@ -943,6 +1036,16 @@ async function runChecks() {
   overflow-y: auto;
   background: var(--bg-deep);
 }
+
+.pane-slot { height: 100%; }
+
+/* Tab switch: short cross-fade (mode="out-in", so old leaves before new enters). */
+.pane-enter-active,
+.pane-leave-active {
+  transition: opacity 120ms ease, transform 120ms ease;
+}
+.pane-enter-from { opacity: 0; transform: translateY(4px); }
+.pane-leave-to   { opacity: 0; transform: translateY(-4px); }
 
 /* ── Detail pane ── */
 .detail-pane {
