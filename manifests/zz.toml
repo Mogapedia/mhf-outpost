@@ -5,6 +5,10 @@ description = "Z Zenith / ZZ (originally released 2018-09-26) — community Engl
 platform    = "pc"
 generation  = "Z"
 released    = "2018-09-26"
+features    = [
+    "Magnet Spike — melee weapon switching between Slashing and Impact with magnetic abilities",
+    "Final content update before the December 2019 server shutdown",
+]
 
 # PATCHED DISTRIBUTION. This manifest describes a community-distributed
 # English-patched ZZ client (main binary: mhf-zz.exe, dated 2022-02-03).

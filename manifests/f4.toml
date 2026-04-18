@@ -5,6 +5,11 @@ description = "Forward.4 — pre-G-series expansion (released 2012-05-23)"
 platform    = "pc"
 generation  = "Forward"
 released    = "2012-05-23"
+features    = [
+    "Kuarusepusu added",
+    "HC Rusted Kushala Daora and HC Gurenzeburu",
+    "Heavenly Sky Armors (Tenranishi) and Supremacy Quests",
+]
 
 [archive]
 identifier = "monster-hunter-frontier-forward-4"

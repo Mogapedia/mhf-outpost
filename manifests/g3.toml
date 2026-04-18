@@ -5,6 +5,9 @@ description = "G3 — no archive.org source yet (released 2013-10-16)"
 platform    = "pc"
 generation  = "G"
 released    = "2013-10-16"
+features    = [
+    "Hunter Partner — AI companion that hunts alongside the player",
+]
 
 # No archive.org source known. If you have this version's files, please
 # open an issue at https://github.com/Mogapedia/mhf-outpost/issues so we

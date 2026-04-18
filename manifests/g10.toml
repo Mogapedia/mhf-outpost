@@ -5,6 +5,10 @@ description = "G10.1 — last pre-Z G-series update (released 2016-07-13)"
 platform    = "pc"
 generation  = "G"
 released    = "2016-07-13"
+features    = [
+    "Voljang, Ruler Guanzorumu and Stygian Zinogre added",
+    "Final pre-Z content update (base G10 released 2016-04-21 with Egyurasu, Guanzorumu, Nargacuga)",
+]
 
 [archive]
 identifier = "mhf-g-10-jp"

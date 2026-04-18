@@ -5,6 +5,11 @@ description = "G1 — first G-series expansion (released 2013-04-17)"
 platform    = "pc"
 generation  = "G"
 released    = "2013-04-17"
+features    = [
+    "G-Rank difficulty tier with dedicated G-class weapons and armor",
+    "10 new monsters including Pokara, Pokaradon, Farunokku, Hyujikiki, Midogaron, Shantien",
+    "New weapon actions for 11 weapon types, 30 new skills, 4 new elements",
+]
 
 [archive]
 identifier = "mhfg-1.0"

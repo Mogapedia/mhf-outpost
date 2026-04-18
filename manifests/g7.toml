@@ -5,6 +5,10 @@ description = "G7 — no archive.org source yet (released 2015-04-15)"
 platform    = "pc"
 generation  = "G"
 released    = "2015-04-15"
+features    = [
+    "Gureadomosu added",
+    "Harudomerugu — Elder Dragon added",
+]
 
 # No archive.org source known. If you have this version's files, please
 # open an issue at https://github.com/Mogapedia/mhf-outpost/issues so we

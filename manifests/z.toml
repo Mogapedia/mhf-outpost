@@ -5,6 +5,11 @@ description = "MHF-Z (originally released 2016-11-09) — vanilla Japanese snaps
 platform    = "pc"
 generation  = "Z"
 released    = "2016-11-09"
+features    = [
+    "Zenith Species — high-power variants of existing monsters",
+    "Extreme Style hunting style",
+    "True Frenzy Gore Magala",
+]
 
 # Vanilla untranslated Japanese MHF-Z snapshot, captured from Capcom Online
 # Games client. Binaries dated 2019-09-09; MHFUP.TMP dated 2019-12-18 (shutdown

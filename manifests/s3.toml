@@ -5,6 +5,9 @@ description = "Season 3.0 — no archive.org source yet (released 2008-07-08)"
 platform    = "pc"
 generation  = "Season"
 released    = "2008-07-08"
+features    = [
+    "Akura Vashimu and Silver Hypnocatrice added",
+]
 
 # No archive.org source known. If you have this version's files, please
 # open an issue at https://github.com/Mogapedia/mhf-outpost/issues so we

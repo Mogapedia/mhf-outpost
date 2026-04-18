@@ -5,6 +5,11 @@ description = "Season 7.0 — no archive.org source yet (released 2009-12-09)"
 platform    = "pc"
 generation  = "Season"
 released    = "2009-12-09"
+features    = [
+    "Laviente — massive earth-serpent raid monster",
+    "Yama Tsukami — flying Elder Dragon",
+    "Solitude Island area",
+]
 
 # No archive.org source known. If you have this version's files, please
 # open an issue at https://github.com/Mogapedia/mhf-outpost/issues so we

@@ -5,6 +5,9 @@ description = "G5.2 — mid G-series update (released 2014-07-23)"
 platform    = "pc"
 generation  = "G"
 released    = "2014-07-23"
+features    = [
+    "Garuba Daora and Inagami introduced in the G5 series",
+]
 
 [archive]
 identifier = "monster-hunter-frontier-g-5.2"

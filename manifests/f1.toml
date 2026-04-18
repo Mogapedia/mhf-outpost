@@ -5,6 +5,11 @@ description = "Forward.1 — first Forward-series expansion (released 2011-04-20
 platform    = "pc"
 generation  = "Forward"
 released    = "2011-04-20"
+features    = [
+    "Rukodiora, Violent Laviente, Unknown added",
+    "Interceptor's Base area",
+    "HC versions of Kamu/Nono Orugaron, Pink Rathian, Kushala Daora, Red Khezu",
+]
 
 # No archive.org source known. If you have this version's files, please
 # open an issue at https://github.com/Mogapedia/mhf-outpost/issues so we

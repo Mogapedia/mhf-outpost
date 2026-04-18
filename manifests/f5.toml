@@ -5,6 +5,11 @@ description = "Forward.5 — final pre-G-series expansion (released 2012-10-17)"
 platform    = "pc"
 generation  = "Forward"
 released    = "2012-10-17"
+features    = [
+    "Odibatorasu added",
+    "HC Gogomoa and HC Berukyurosu",
+    "Rank Match system and Stamp Card collection",
+]
 
 [archive]
 identifier = "monster-hunter-frontier-forward-5"

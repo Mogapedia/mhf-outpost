@@ -5,6 +5,10 @@ description = "G9.1 — late G-series update (released 2016-02-03)"
 platform    = "pc"
 generation  = "G"
 released    = "2016-02-03"
+features    = [
+    "Furious Rajang — super-class monster",
+    "Toa Tesukatora, Howling Zinogre, Uragaan, Thirsty Pariapuria added",
+]
 
 [archive]
 identifier = "MHFG91"

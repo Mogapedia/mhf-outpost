@@ -5,6 +5,9 @@ description = "G6 — no archive.org source yet (released 2014-11-19)"
 platform    = "pc"
 generation  = "G"
 released    = "2014-11-19"
+features    = [
+    "Varusaburosu added in the G6.1 sub-update",
+]
 
 # No archive.org source known. If you have this version's files, please
 # open an issue at https://github.com/Mogapedia/mhf-outpost/issues so we

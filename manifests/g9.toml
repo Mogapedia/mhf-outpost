@@ -5,6 +5,10 @@ description = "G9 — no archive.org source yet (released 2015-11-18)"
 platform    = "pc"
 generation  = "G"
 released    = "2015-11-18"
+features    = [
+    "Berserk Laviente — extreme Laviente variant",
+    "Toridcless, Starving Deviljho, Barioth added",
+]
 
 # No archive.org source known. If you have this version's files, please
 # open an issue at https://github.com/Mogapedia/mhf-outpost/issues so we

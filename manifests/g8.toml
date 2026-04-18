@@ -5,6 +5,10 @@ description = "G8 — no archive.org source yet (released 2015-07-22)"
 platform    = "pc"
 generation  = "G"
 released    = "2015-07-22"
+features    = [
+    "Deviljho, Gasurabazura, Kusubami, Yama Kurai, Zinogre added",
+    "Brachydios added in the G8.1 sub-update",
+]
 
 # No archive.org source known. If you have this version's files, please
 # open an issue at https://github.com/Mogapedia/mhf-outpost/issues so we

@@ -5,6 +5,11 @@ description = "Forward.2 — no archive.org source yet (released 2011-09-29)"
 platform    = "pc"
 generation  = "Forward"
 released    = "2011-09-29"
+features    = [
+    "Gogomoa — web-shooting monkey-like monster",
+    "Tide Island area",
+    "Halk companion (Flying Wyvern-type)",
+]
 
 # No archive.org source known. If you have this version's files, please
 # open an issue at https://github.com/Mogapedia/mhf-outpost/issues so we
