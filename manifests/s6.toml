@@ -3,6 +3,8 @@ id          = "S6"
 name        = "Season 6.0"
 description = "Season 6.0 — early base-game expansion (released 2009-09-16)"
 platform    = "pc"
+generation  = "Season"
+released    = "2009-09-16"
 
 [archive]
 identifier = "mhfo-season-6.0"

@@ -27,6 +27,21 @@ const EMBEDDED: &[(&str, &str)] = &[
     include_manifest!("wiiu"),
 ];
 
+/// Which top-level generation of MHF a version belongs to, used to group
+/// versions in the launcher sidebar. Wii U / other console manifests leave
+/// this unset — they surface under their platform heading instead.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize, Serialize)]
+pub enum Generation {
+    /// Season 1.0 through Season 10.0 (2007–2011).
+    Season,
+    /// Forward.1 through Forward.5 (2011–2012).
+    Forward,
+    /// G1 through G10.1 + GG (2013–2016).
+    G,
+    /// Z, Z1, Z2, Z Zenith / ZZ (2016–2018).
+    Z,
+}
+
 #[derive(Debug, Deserialize, Serialize)]
 pub struct VersionInfo {
     /// Short identifier used on the CLI (e.g. "ZZ", "GG").
@@ -35,6 +50,19 @@ pub struct VersionInfo {
     pub name: String,
     pub description: String,
     pub platform: String,
+    /// Top-level generation used for sidebar grouping. Optional because
+    /// Wii U / console collections don't fit the PC generation axis.
+    #[serde(default)]
+    pub generation: Option<Generation>,
+    /// Original JP release date in `YYYY-MM-DD` form. Used to sort versions
+    /// within a generation and to power the launcher's version timeline.
+    #[serde(default)]
+    pub released: Option<String>,
+    /// Changelog bullets — the major features introduced by this version.
+    /// Rendered as a list in the launcher's detail pane. Empty means
+    /// "not yet researched" and will be filled in follow-ups.
+    #[serde(default)]
+    pub features: Vec<String>,
 }
 
 /// Metadata for a canonical archive on archive.org.
@@ -283,5 +311,49 @@ size = 1024
     fn all_returns_non_empty_list() {
         let all = Manifest::all();
         assert!(!all.is_empty(), "at least one embedded manifest expected");
+    }
+
+    // ── Generation / released / features round-trip ──────────────────────────
+
+    #[test]
+    fn load_file_with_generation_and_features() {
+        use std::io::Write;
+        let toml = r#"
+[version]
+id = "TEST"
+name = "Test Version"
+description = "Unit test manifest"
+platform = "pc"
+generation = "G"
+released = "2014-04-23"
+features = ["New G Rank", "Tower Sanctuary"]
+"#;
+        let mut tmp = std::env::temp_dir();
+        tmp.push("mhf_outpost_manifest_gen_test.toml");
+        {
+            let mut f = std::fs::File::create(&tmp).unwrap();
+            f.write_all(toml.as_bytes()).unwrap();
+        }
+        let m = Manifest::load_file(&tmp).expect("should parse TOML with new fields");
+        std::fs::remove_file(&tmp).ok();
+
+        assert_eq!(m.version.generation, Some(Generation::G));
+        assert_eq!(m.version.released.as_deref(), Some("2014-04-23"));
+        assert_eq!(m.version.features.len(), 2);
+    }
+
+    #[test]
+    fn embedded_pc_manifests_have_generation() {
+        // Every embedded PC manifest must declare a generation so the
+        // sidebar can group them; Wii U / console manifests are exempt.
+        for m in Manifest::all() {
+            if m.version.platform == "pc" {
+                assert!(
+                    m.version.generation.is_some(),
+                    "PC manifest '{}' is missing `generation`",
+                    m.version.id
+                );
+            }
+        }
     }
 }

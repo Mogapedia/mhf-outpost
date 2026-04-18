@@ -3,6 +3,8 @@ id          = "ZZ"
 name        = "G10-ZZ (patched)"
 description = "Z Zenith / ZZ (originally released 2018-09-26) — community English-patched snapshot, Feb 2022 build"
 platform    = "pc"
+generation  = "Z"
+released    = "2018-09-26"
 
 # PATCHED DISTRIBUTION. This manifest describes a community-distributed
 # English-patched ZZ client (main binary: mhf-zz.exe, dated 2022-02-03).

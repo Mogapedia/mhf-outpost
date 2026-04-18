@@ -12,9 +12,31 @@ pub struct VersionDto {
     pub name: String,
     pub description: String,
     pub platform: String,
+    /// `"Season" | "Forward" | "G" | "Z"` for PC versions; `null` for Wii U
+    /// / console collections that don't fit the PC generation axis.
+    pub generation: Option<String>,
+    /// Original JP release date as `YYYY-MM-DD`, or `null` if unknown.
+    pub released: Option<String>,
+    /// Changelog bullets for the version's major features.
+    pub features: Vec<String>,
     pub has_archive: bool,
     pub archive_size_gb: Option<f64>,
     pub archive_format: Option<String>,
+}
+
+fn version_dto(m: &manifest::Manifest) -> VersionDto {
+    VersionDto {
+        id: m.version.id.clone(),
+        name: m.version.name.clone(),
+        description: m.version.description.clone(),
+        platform: m.version.platform.clone(),
+        generation: m.version.generation.map(|g| format!("{g:?}")),
+        released: m.version.released.clone(),
+        features: m.version.features.clone(),
+        has_archive: m.archive.is_some(),
+        archive_size_gb: m.archive.as_ref().map(|a| a.size as f64 / 1_073_741_824.0),
+        archive_format: m.archive.as_ref().map(|a| a.format.clone()),
+    }
 }
 
 #[derive(Serialize, Clone)]
@@ -38,32 +60,13 @@ pub struct DownloadProgressEvent {
 
 #[tauri::command]
 pub fn list_versions() -> Vec<VersionDto> {
-    manifest::Manifest::all()
-        .into_iter()
-        .map(|m| VersionDto {
-            id: m.version.id.clone(),
-            name: m.version.name.clone(),
-            description: m.version.description.clone(),
-            platform: m.version.platform.clone(),
-            has_archive: m.archive.is_some(),
-            archive_size_gb: m.archive.as_ref().map(|a| a.size as f64 / 1_073_741_824.0),
-            archive_format: m.archive.as_ref().map(|a| a.format.clone()),
-        })
-        .collect()
+    manifest::Manifest::all().iter().map(version_dto).collect()
 }
 
 #[tauri::command]
 pub fn get_version_info(version: String) -> Result<VersionDto, String> {
     let m = manifest::Manifest::load(&version).map_err(|e| e.to_string())?;
-    Ok(VersionDto {
-        id: m.version.id.clone(),
-        name: m.version.name.clone(),
-        description: m.version.description.clone(),
-        platform: m.version.platform.clone(),
-        has_archive: m.archive.is_some(),
-        archive_size_gb: m.archive.as_ref().map(|a| a.size as f64 / 1_073_741_824.0),
-        archive_format: m.archive.as_ref().map(|a| a.format.clone()),
-    })
+    Ok(version_dto(&m))
 }
 
 #[tauri::command]

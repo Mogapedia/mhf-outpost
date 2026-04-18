@@ -3,6 +3,8 @@ id          = "G91"
 name        = "G9.1"
 description = "G9.1 — late G-series update (released 2016-02-03)"
 platform    = "pc"
+generation  = "G"
+released    = "2016-02-03"
 
 [archive]
 identifier = "MHFG91"

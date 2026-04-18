@@ -3,6 +3,8 @@ id          = "G52"
 name        = "G5.2"
 description = "G5.2 — mid G-series update (released 2014-07-23)"
 platform    = "pc"
+generation  = "G"
+released    = "2014-07-23"
 
 [archive]
 identifier = "monster-hunter-frontier-g-5.2"

@@ -3,6 +3,8 @@ id          = "GG"
 name        = "GG"
 description = "G Genuine (GG) — mid G-series expansion (released 2014-04-23)"
 platform    = "pc"
+generation  = "G"
+released    = "2014-04-23"
 
 [archive]
 identifier = "MHFGG"

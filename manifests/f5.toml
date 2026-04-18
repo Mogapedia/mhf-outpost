@@ -3,6 +3,8 @@ id          = "F5"
 name        = "Forward.5"
 description = "Forward.5 — final pre-G-series expansion (released 2012-10-17)"
 platform    = "pc"
+generation  = "Forward"
+released    = "2012-10-17"
 
 [archive]
 identifier = "monster-hunter-frontier-forward-5"

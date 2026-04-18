@@ -3,6 +3,8 @@ id          = "Z"
 name        = "MHF-Z"
 description = "MHF-Z (originally released 2016-11-09) — vanilla Japanese snapshot, Sept 2019 binaries, pre-ZZ, COG distribution"
 platform    = "pc"
+generation  = "Z"
+released    = "2016-11-09"
 
 # Vanilla untranslated Japanese MHF-Z snapshot, captured from Capcom Online
 # Games client. Binaries dated 2019-09-09; MHFUP.TMP dated 2019-12-18 (shutdown

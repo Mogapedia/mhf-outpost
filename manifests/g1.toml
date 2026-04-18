@@ -3,6 +3,8 @@ id          = "G1"
 name        = "G1.0"
 description = "G1 — first G-series expansion (released 2013-04-17)"
 platform    = "pc"
+generation  = "G"
+released    = "2013-04-17"
 
 [archive]
 identifier = "mhfg-1.0"
