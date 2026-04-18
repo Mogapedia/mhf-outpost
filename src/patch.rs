@@ -400,13 +400,13 @@ fn rebuild_section(
             );
         }
         let n = target_segments.len().min(entry.offsets.len());
-        for i in 0..n {
+        for (i, target) in target_segments.iter().enumerate().take(n) {
             // Skip segments that are unchanged from source.
             let src = source_segments.get(i).map(String::as_str).unwrap_or("");
-            if target_segments[i] == src {
+            if target == src {
                 continue;
             }
-            overrides.insert(entry.offsets[i], target_segments[i].clone());
+            overrides.insert(entry.offsets[i], target.clone());
         }
         applied += 1;
     }

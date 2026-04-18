@@ -464,7 +464,7 @@ pub fn extract(data: &[u8], cfg: &SectionConfig) -> Result<Vec<EntryOffsets>> {
 /// pointers between zero terminators (when any zero is present) into
 /// joined entries — matches FTH's `read_file_section`.
 fn read_flat_pointer_table(data: &[u8], start: u32, length: u32) -> Result<Vec<EntryOffsets>> {
-    if length == 0 || length % 4 != 0 {
+    if length == 0 || !length.is_multiple_of(4) {
         if length == 0 {
             return Ok(vec![]);
         }
@@ -475,7 +475,7 @@ fn read_flat_pointer_table(data: &[u8], start: u32, length: u32) -> Result<Vec<E
     for i in 0..n {
         pointers.push(read_u32(data, start + (i as u32) * 4)?);
     }
-    let join_lines = pointers.iter().any(|&p| p == 0);
+    let join_lines = pointers.contains(&0);
 
     let mut out: Vec<EntryOffsets> = Vec::new();
     let mut current_id: i32 = if join_lines { 0 } else { -1 };
