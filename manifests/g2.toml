@@ -1,7 +1,7 @@
 [version]
 id          = "G2"
 name        = "G2"
-description = "G2 early G-series"
+description = "G2 — early G-series expansion (released 2013-07-10)"
 platform    = "pc"
 
 [archive]

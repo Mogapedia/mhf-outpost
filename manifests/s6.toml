@@ -1,7 +1,7 @@
 [version]
 id          = "S6"
 name        = "Season 6.0"
-description = "Very early season version"
+description = "Season 6.0 — early base-game expansion (released 2009-09-16)"
 platform    = "pc"
 
 [archive]

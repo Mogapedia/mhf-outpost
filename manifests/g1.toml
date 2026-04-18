@@ -1,7 +1,7 @@
 [version]
 id          = "G1"
 name        = "G1.0"
-description = "First G-series release"
+description = "G1 — first G-series expansion (released 2013-04-17)"
 platform    = "pc"
 
 [archive]

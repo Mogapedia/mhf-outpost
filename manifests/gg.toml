@@ -1,7 +1,7 @@
 [version]
 id          = "GG"
 name        = "GG"
-description = "G-series GG variant"
+description = "G Genuine (GG) — mid G-series expansion (released 2014-04-23)"
 platform    = "pc"
 
 [archive]

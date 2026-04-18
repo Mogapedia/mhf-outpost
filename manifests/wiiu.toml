@@ -1,7 +1,7 @@
 [version]
 id          = "WIIU"
 name        = "Wii U Z2"
-description = "Wii U G3-Z2 collection (v2064 = latest)"
+description = "Wii U G3–Z2 collection (v2064 = latest; Wii U service ended 2018-08-01)"
 platform    = "wiiu"
 
 # The archive.org item contains multiple Wii U versions (G3 through Z2).

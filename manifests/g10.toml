@@ -1,7 +1,7 @@
 [version]
 id          = "G10"
 name        = "G10.1"
-description = "G10.1 JP build"
+description = "G10.1 — last pre-Z G-series update (released 2016-07-13)"
 platform    = "pc"
 
 [archive]
