@@ -14,6 +14,7 @@ macro_rules! include_manifest {
 /// All known version manifests, embedded at compile time.
 const EMBEDDED: &[(&str, &str)] = &[
     include_manifest!("zz"),
+    include_manifest!("z"),
     include_manifest!("g10"),
     include_manifest!("g91"),
     include_manifest!("gg"),

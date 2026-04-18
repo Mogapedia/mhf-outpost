@@ -1,32 +1,28 @@
 [version]
-id          = "ZZ"
-name        = "G10-ZZ (patched)"
-description = "G10-ZZ engine with community English translation patch (Feb 2022 build)"
+id          = "Z"
+name        = "MHF-Z"
+description = "Final MHF-Z build before the ZZ update (vanilla Japanese, Sept 2019 binaries, COG distribution)"
 platform    = "pc"
 
-# PATCHED DISTRIBUTION. This manifest describes a community-distributed
-# English-patched ZZ client (main binary: mhf-zz.exe, dated 2022-02-03).
-# The untranslated Japanese ZZ Capcom build has no known public source;
-# if you find one on archive.org or elsewhere, please open an issue so we
-# can add a vanilla-ZZ manifest alongside this one.
+# Vanilla untranslated Japanese MHF-Z snapshot, captured from Capcom Online
+# Games client. Binaries dated 2019-09-09; MHFUP.TMP dated 2019-12-18 (shutdown
+# day), so this appears to be a client captured mid-update just before the
+# final ZZ patch landed. No `mhf-zz.exe` — main binary is `mhf.exe`.
 #
-# Extraction: the archive contains a single directory
-# `Monster Hunter Frontier Online/` — copy its contents to the game dir.
+# Extraction: the archive.org item contains one 7z file (MHFO.7z) which expands
+# to `MHFO/CAPCOM/Monster Hunter Frontier Online/` and
+# `MHFO/CAPCOM TAIWAN/...`. Use the CAPCOM subdirectory for this manifest.
+# The CAPCOM TAIWAN subtree is a separate MHF-Z TW variant not covered here.
 
 [archive]
-identifier = "monster-hunter-frontier-online.-7z"
-filename   = "Monster Hunter Frontier Online.7z"
+identifier = "mhfo.7z"
+filename   = "MHFO.7z"
 format     = "7z"
-size       = 5319207383
-sha1       = "6d48e19ce4c570968a6d1dc0add50862eba8d968"
-md5        = "685b38486a8517c6ab8cc80f50cac6e6"
+size       = 10388863700
+sha1       = "76720f43c084d6b4823e5184aaef2dcbaa705fe9"
+md5        = "8563fed62d63e42e96f5a01c07251521"
 
 # ── Core executables ──────────────────────────────────────────────────────────
-[[files]]
-path   = "mhf-zz.exe"
-sha256 = "c87f96c3d90e47f6c5f6d224a1bf5cd3d6273b5d7c248c61c0aaec085118a856"
-kind   = "core"
-
 [[files]]
 path   = "mhf.exe"
 sha256 = "ed80fde7d673aabeb3c918e60fc4fe3552258122f630401c5c0a32c69f18c780"
@@ -34,17 +30,17 @@ kind   = "core"
 
 [[files]]
 path   = "mhfo.dll"
-sha256 = "69b65205b1f23a6989395cd811c414d410fe43d7acd3c33a565e2c564ad184f4"
+sha256 = "6598c9f800b275cfc4e832995103ab4b4dba9c7c2ca6112f20f870bf35a1afa9"
 kind   = "core"
 
 [[files]]
 path   = "mhfo-hd.dll"
-sha256 = "95c580195f4080d2e9582c8c9df36abeb280476e088b6366583c5f138da8f301"
+sha256 = "55a78ede1a7cff88fa644690087464ac6390643fcb5544dc9f3985747f1b28a6"
 kind   = "core"
 
 [[files]]
 path   = "mhl.dll"
-sha256 = "eda24f7b82950cc2dc804b19989da0f1c3f9976a9acb7a0dd95e81660301ebc7"
+sha256 = "c10275679f52dd2ce74f8fbdef58e1fcb0bd3e14abd86b64bdfc2a96b6a4ed3a"
 kind   = "core"
 
 # ── Runtime DLLs ──────────────────────────────────────────────────────────────
@@ -82,13 +78,7 @@ kind   = "url"
 # ── User configuration — expected to vary per install ────────────────────────
 [[files]]
 path     = "mhf.ini"
-sha256   = "6fdef2371b5f34312e229d78fa809b787ecfeaae4f7945281f14a572dff97eec"
-kind     = "config"
-optional = true
-
-[[files]]
-path     = "mhf2.ini"
-sha256   = "556bd5d1fdd2229691bf4be8474b62bfaec3ade6ddd8708ef67fb574dd1f842d"
+sha256   = "a39ca6adc44babe1203e74ab484efe5c7004ac156a3a5f5fabdda0b7805587b7"
 kind     = "config"
 optional = true
 
@@ -104,7 +94,7 @@ sha256   = "cf8ac782a4df311cece0c05dd292e1de047b3a8feead9698600013d6eb4a0020"
 kind     = "core"
 optional = true
 
-# ── Game data — translation-sensitive (often modified by fan patches) ─────────
+# ── Game data — translation-sensitive (vanilla here) ─────────────────────────
 [[files]]
 path   = "dat/effect.bin"
 sha256 = "16906745b8fc12172806a4c6877fac2ac11b0440a8c3fc8410dfe79277480d6b"
@@ -130,10 +120,3 @@ kind   = "core"
 path   = "dat/demo.txb"
 sha256 = "11c39fe92ac554a4d0071f535df59a1b7c82f2ee5bb9d7aaaac1dc3b873c9c1d"
 kind   = "core"
-
-# ── Save / user data ──────────────────────────────────────────────────────────
-[[files]]
-path     = "dat/guildcard.bin"
-sha256   = "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
-kind     = "config"
-optional = true
