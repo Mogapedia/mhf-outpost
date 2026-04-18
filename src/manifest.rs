@@ -11,19 +11,39 @@ macro_rules! include_manifest {
     };
 }
 
-/// All known version manifests, embedded at compile time.
+/// All known version manifests, embedded at compile time. Ordered by
+/// original JP release date, newest first; versions without a known
+/// archive source still appear as stubs so the launcher can present the
+/// complete MHF timeline. Wii U / console collections live at the end.
 const EMBEDDED: &[(&str, &str)] = &[
     include_manifest!("zz"),
     include_manifest!("z"),
     include_manifest!("g10"),
     include_manifest!("g91"),
-    include_manifest!("gg"),
+    include_manifest!("g9"),
+    include_manifest!("g8"),
+    include_manifest!("g7"),
+    include_manifest!("g6"),
     include_manifest!("g52"),
+    include_manifest!("gg"),
+    include_manifest!("g3"),
     include_manifest!("g2"),
     include_manifest!("g1"),
     include_manifest!("f5"),
     include_manifest!("f4"),
+    include_manifest!("f3"),
+    include_manifest!("f2"),
+    include_manifest!("f1"),
+    include_manifest!("s10"),
+    include_manifest!("s9"),
+    include_manifest!("s8"),
+    include_manifest!("s7"),
     include_manifest!("s6"),
+    include_manifest!("s5"),
+    include_manifest!("s4"),
+    include_manifest!("s3"),
+    include_manifest!("s2"),
+    include_manifest!("s1"),
     include_manifest!("wiiu"),
 ];
 

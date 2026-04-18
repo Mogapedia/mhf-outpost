@@ -1,0 +1,11 @@
+[version]
+id          = "S4"
+name        = "Season 4.0"
+description = "Season 4.0 — no archive.org source yet (released 2008-12-17)"
+platform    = "pc"
+generation  = "Season"
+released    = "2008-12-17"
+
+# No archive.org source known. If you have this version's files, please
+# open an issue at https://github.com/Mogapedia/mhf-outpost/issues so we
+# can add an [archive] block + file hashes.

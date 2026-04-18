@@ -1,0 +1,11 @@
+[version]
+id          = "S8"
+name        = "Season 8.0"
+description = "Season 8.0 — no archive.org source yet (released 2010-04-21)"
+platform    = "pc"
+generation  = "Season"
+released    = "2010-04-21"
+
+# No archive.org source known. If you have this version's files, please
+# open an issue at https://github.com/Mogapedia/mhf-outpost/issues so we
+# can add an [archive] block + file hashes.

@@ -1,0 +1,11 @@
+[version]
+id          = "S10"
+name        = "Season 10.0"
+description = "Season 10.0 — final pre-Forward base expansion (released 2011-01-26)"
+platform    = "pc"
+generation  = "Season"
+released    = "2011-01-26"
+
+# No archive.org source known. If you have this version's files, please
+# open an issue at https://github.com/Mogapedia/mhf-outpost/issues so we
+# can add an [archive] block + file hashes.

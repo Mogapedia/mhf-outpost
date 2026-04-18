@@ -1,0 +1,11 @@
+[version]
+id          = "S7"
+name        = "Season 7.0"
+description = "Season 7.0 — no archive.org source yet (released 2009-12-09)"
+platform    = "pc"
+generation  = "Season"
+released    = "2009-12-09"
+
+# No archive.org source known. If you have this version's files, please
+# open an issue at https://github.com/Mogapedia/mhf-outpost/issues so we
+# can add an [archive] block + file hashes.

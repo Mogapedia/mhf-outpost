@@ -1,0 +1,11 @@
+[version]
+id          = "F3"
+name        = "Forward.3"
+description = "Forward.3 — no archive.org source yet (released 2012-02-01)"
+platform    = "pc"
+generation  = "Forward"
+released    = "2012-02-01"
+
+# No archive.org source known. If you have this version's files, please
+# open an issue at https://github.com/Mogapedia/mhf-outpost/issues so we
+# can add an [archive] block + file hashes.
