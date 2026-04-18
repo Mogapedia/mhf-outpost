@@ -1,4 +1,5 @@
 use anyhow::{bail, Context, Result};
+use flate2::read::GzDecoder;
 use indicatif::{ProgressBar, ProgressStyle};
 use serde::Deserialize;
 use std::io::{Read, Write};
@@ -10,8 +11,11 @@ const REQUEST_TIMEOUT: Duration = Duration::from_secs(30);
 /// Default GitHub repository for MHFrontier translations (owner/repo).
 pub const DEFAULT_REPO: &str = "mogapedia/MHFrontier-Translation";
 
-/// Name of the release asset containing only already-translated strings.
-const TRANSLATED_JSON_ASSET: &str = "translations-translated.json";
+/// Release asset filename template for per-language gzipped launcher payloads
+/// (MHFrontier-Translation v0.2.0+). Substitute `{lang}` with the ISO code.
+fn translated_asset_name(lang: &str) -> String {
+    format!("translations-{lang}.json.gz")
+}
 
 // ── GitHub API types ──────────────────────────────────────────────────────────
 
@@ -39,16 +43,14 @@ pub struct TranslateOptions {
     pub repo: String,
 }
 
-/// Download `translations-translated.json` from the latest GitHub release and
-/// save it to the game directory, then apply it via FrontierTextHandler.
+/// Download the latest per-language translation payload from GitHub and apply
+/// it to the game directory.
 ///
-/// The release JSON contains only the translated strings (no original game
-/// data), so it is safe to distribute.  Applying the patch requires the user's
-/// own game files and FrontierTextHandler.
-///
-/// If `opts.fth_dir` points to a FrontierTextHandler checkout, the patch is
-/// applied automatically.  Otherwise, the JSON is saved and instructions are
-/// printed.
+/// Since MHFrontier-Translation v0.2.0 the release assets are per-language
+/// gzipped JSON files (`translations-{lang}.json.gz`) that contain only the
+/// translated strings — no original game data. The payload uses the index-
+/// keyed format with `{j}` join markers and `{cNN}`/`{/c}` color codes.
+/// Applying the patch requires the user's own game files.
 pub fn run(opts: TranslateOptions) -> Result<()> {
     let client = reqwest::blocking::Client::builder()
         .user_agent("mhf-outpost/0.1")
@@ -70,11 +72,12 @@ pub fn run(opts: TranslateOptions) -> Result<()> {
 
     println!("Release: {}", release.tag_name);
 
-    // Locate the translations-translated.json asset.
+    // Locate the per-language gzipped payload (v0.2.0 asset naming).
+    let asset_name = translated_asset_name(&opts.lang);
     let asset = release
         .assets
         .iter()
-        .find(|a| a.name == TRANSLATED_JSON_ASSET)
+        .find(|a| a.name == asset_name)
         .ok_or_else(|| {
             let available = release
                 .assets
@@ -84,7 +87,7 @@ pub fn run(opts: TranslateOptions) -> Result<()> {
                 .join(", ");
             anyhow::anyhow!(
                 "asset '{}' not found in release {} of {}\nAvailable: {}",
-                TRANSLATED_JSON_ASSET,
+                asset_name,
                 release.tag_name,
                 opts.repo,
                 available,
@@ -94,9 +97,14 @@ pub fn run(opts: TranslateOptions) -> Result<()> {
     std::fs::create_dir_all(&opts.dest)
         .with_context(|| format!("cannot create '{}'", opts.dest.display()))?;
 
-    let json_path = opts.dest.join(TRANSLATED_JSON_ASSET);
-    download_asset(&client, asset, &json_path)?;
-    println!("  Saved to {}", json_path.display());
+    let gz_path = opts.dest.join(&asset_name);
+    download_asset(&client, asset, &gz_path)?;
+
+    // Decompress the gzipped payload into the parallel .json file.
+    let json_path = opts.dest.join(format!("translations-{}.json", opts.lang));
+    decompress_gzip(&gz_path, &json_path)
+        .with_context(|| format!("failed to decompress {}", gz_path.display()))?;
+    println!("  Decompressed to {}", json_path.display());
 
     println!("\nApplying translations…");
     let results = crate::patch::apply_translations(&json_path, &opts.lang, &opts.dest, true, true)?;
@@ -212,5 +220,16 @@ fn download_asset(client: &reqwest::blocking::Client, asset: &Asset, dest: &Path
     }
     pb.finish_and_clear();
     println!("  ✓ {} → {}", asset.name, dest.display());
+    Ok(())
+}
+
+/// Stream-decompress a gzipped file to a plain file next to it.
+fn decompress_gzip(src: &Path, dest: &Path) -> Result<()> {
+    let input = std::fs::File::open(src)
+        .with_context(|| format!("cannot open {}", src.display()))?;
+    let mut decoder = GzDecoder::new(input);
+    let mut output = std::fs::File::create(dest)
+        .with_context(|| format!("cannot create {}", dest.display()))?;
+    std::io::copy(&mut decoder, &mut output)?;
     Ok(())
 }

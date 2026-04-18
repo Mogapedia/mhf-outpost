@@ -156,9 +156,12 @@ enum Command {
 
     /// Apply fan translations from a GitHub release to the game directory.
     ///
-    /// Downloads `translations-translated.json` from the latest release of the
-    /// specified GitHub repository (no original game data — patches only), then
-    /// applies it directly to the game files (ECD encrypt + JKR compress).
+    /// Downloads `translations-{lang}.json.gz` from the latest release of the
+    /// specified GitHub repository (MHFrontier-Translation v0.2.0+ per-language
+    /// gzipped payload — no original game data), decompresses it alongside the
+    /// archive, then applies the translations directly to the game files (ECD
+    /// encrypt + JKR compress). The payload uses the index-keyed format with
+    /// `{j}` join markers and `{cNN}`/`{/c}` color codes.
     Translate {
         /// Game root directory (contains mhf.exe, dat/, …).
         #[arg(short, long)]

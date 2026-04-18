@@ -6,17 +6,26 @@
 //! { "<lang>": { "<xpath>": [ { "index": "0", "source": "…", "target": "…" }, … ] } }
 //! ```
 //!
+//! Since release v0.2.0 the `source` field may be absent (per-language
+//! `--no-source` payload) — entries are resolved purely by `index`.
+//!
 //! `index` is a stable per-section slot number into the section's pointer
 //! table. We resolve indexes to absolute file offsets by re-extracting
 //! the section live from the (decrypted/decompressed) game binary using
 //! [`crate::pointer_tables`], which ports FTH's extractor.
 //!
-//! Strings whose source extraction grouped multiple pointers (FTH's
-//! `<join at="…">` markup) appear as a single JSON entry with the
-//! markup inlined. We split such entries on the `<join …>` tags and
-//! map segments **positionally** to the entry's offset list — we ignore
-//! the literal `at="N"` value because it bakes the original binary's
-//! offsets into the JSON and would not survive any string-length shift.
+//! Strings whose source extraction grouped multiple pointers appear as a
+//! single JSON entry with segments separated by `{j}` (v0.2.0+) or the
+//! legacy `<join at="…">` tag (v0.1.0). Both forms are accepted. Segments
+//! are mapped **positionally** onto the entry's offset list; any literal
+//! offset value inside a legacy tag is discarded because it bakes the
+//! original binary's offsets into the JSON and would not survive any
+//! string-length shift.
+//!
+//! Inline color spans use the ASCII-safe brace form `{cNN}` (open) and
+//! `{/c}` (close/reset) in the JSON. Before Shift-JIS encoding we rewrite
+//! them to the game's native `~CNN` / `~C00` form (byte `0x7E` followed by
+//! `'C'` and two decimal digits), which is what the renderer expects.
 //!
 //! Strategy: **rebuild_section** (matches FTH's `rebuild_section`).
 //! For each game file, for each section, we extract every entry, build
@@ -66,37 +75,101 @@ struct Translation {
     source_raw: String,
 }
 
-/// Split a `<join at="…">`-marked text into its segments. The literal
-/// offset values inside the markup are discarded — segments are matched
-/// positionally to the extractor's offset list.
+/// Split a grouped-entry text on its join markers. Accepts both the
+/// v0.2.0+ `{j}` marker and the legacy `<join at="…">` tag. Any literal
+/// offset inside a legacy tag is discarded; segments are matched
+/// positionally to the extractor's offset list at apply time.
 fn split_joined(text: &str) -> Vec<String> {
     // Fast path
-    if !text.contains("<join") {
+    if !text.contains("<join") && !text.contains("{j}") {
         return vec![text.to_string()];
     }
     let mut out = Vec::new();
     let mut rest = text;
     loop {
-        match rest.find("<join") {
-            None => {
-                out.push(rest.to_string());
-                return out;
-            }
-            Some(start) => {
-                out.push(rest[..start].to_string());
-                let after = &rest[start..];
-                let close = match after.find('>') {
-                    Some(i) => i,
-                    None => {
-                        // Malformed — treat the rest as one segment.
-                        out.push(after.to_string());
-                        return out;
-                    }
-                };
-                rest = &after[close + 1..];
-            }
-        }
+        let Some((start, end)) = find_next_join_marker(rest) else {
+            out.push(rest.to_string());
+            return out;
+        };
+        out.push(rest[..start].to_string());
+        rest = &rest[end..];
     }
+}
+
+/// Locate the next join marker in `s`. Returns `(start, end)` byte offsets
+/// bracketing the marker (the slice `s[start..end]` is the marker text),
+/// or `None` if neither form is present.
+fn find_next_join_marker(s: &str) -> Option<(usize, usize)> {
+    let legacy = s.find("<join");
+    let brace = s.find("{j}");
+    let use_legacy = match (legacy, brace) {
+        (None, None) => return None,
+        (Some(_), None) => true,
+        (None, Some(_)) => false,
+        (Some(a), Some(b)) => a < b,
+    };
+    if use_legacy {
+        let start = legacy.unwrap();
+        // A malformed tag with no closing '>' — swallow the rest so we
+        // don't loop forever; the caller will treat what follows as one
+        // trailing segment on the next iteration.
+        let close_rel = s[start..].find('>').unwrap_or(s.len() - start - 1);
+        Some((start, start + close_rel + 1))
+    } else {
+        let start = brace.unwrap();
+        Some((start, start + "{j}".len()))
+    }
+}
+
+/// Rewrite the brace-form color codes (`{cNN}` / `{/c}`) used in the
+/// translation JSON back to the game's `~CNN` / `~C00` wire form before
+/// Shift-JIS encoding.
+///
+/// The game stores color spans as the byte `0x7E` followed by `'C'` and
+/// two decimal digits. In plain Shift-JIS, `0x7E` decodes to ASCII tilde
+/// (`~`), so we intentionally emit ASCII tilde — `encoding_rs::SHIFT_JIS`
+/// maps it back to `0x7E` byte-for-byte. (The Python toolchain uses
+/// `shift_jisx0213` where the same byte is `‾`, the overline character;
+/// both Unicode spellings produce the same byte in the file, but ASCII
+/// tilde is the portable choice for `encoding_rs`.)
+///
+/// Bytes in multi-byte UTF-8 runs are always `>= 0x80`, so scanning at
+/// the byte level for the ASCII markers never confuses continuation
+/// bytes with real `{`/`/`/`c`/`}` characters — any `{` byte we see is a
+/// genuine brace.
+fn color_codes_from_csv(text: &str) -> String {
+    if !text.contains('{') {
+        return text.to_string();
+    }
+    let bytes = text.as_bytes();
+    let mut out = Vec::with_capacity(bytes.len());
+    let mut i = 0;
+    while i < bytes.len() {
+        // {/c}  → ~C00
+        if i + 4 <= bytes.len() && &bytes[i..i + 4] == b"{/c}" {
+            out.extend_from_slice(b"~C00");
+            i += 4;
+            continue;
+        }
+        // {cNN} → ~CNN
+        if i + 5 <= bytes.len()
+            && bytes[i] == b'{'
+            && bytes[i + 1] == b'c'
+            && bytes[i + 2].is_ascii_digit()
+            && bytes[i + 3].is_ascii_digit()
+            && bytes[i + 4] == b'}'
+        {
+            out.extend_from_slice(b"~C");
+            out.push(bytes[i + 2]);
+            out.push(bytes[i + 3]);
+            i += 5;
+            continue;
+        }
+        out.push(bytes[i]);
+        i += 1;
+    }
+    // Safe: we only copy whole bytes of valid UTF-8 and inject ASCII.
+    String::from_utf8(out).expect("color_codes_from_csv preserves UTF-8")
 }
 
 /// Transliterate characters that have no Shift-JIS representation into
@@ -142,7 +215,8 @@ fn transliterate_for_sjis(text: &str) -> String {
 }
 
 fn encode_shift_jis(text: &str) -> Vec<u8> {
-    let translit = transliterate_for_sjis(text);
+    let with_game_codes = color_codes_from_csv(text);
+    let translit = transliterate_for_sjis(&with_game_codes);
     let (encoded, _, _) = encoding_rs::SHIFT_JIS.encode(&translit);
     encoded.into_owned()
 }
@@ -372,9 +446,56 @@ mod tests {
     }
 
     #[test]
-    fn split_joined_three_segments() {
+    fn split_joined_legacy_tags() {
         let s = r#"a<join at="100">b<join at="104">c"#;
         assert_eq!(split_joined(s), vec!["a", "b", "c"]);
+    }
+
+    #[test]
+    fn split_joined_brace_marker() {
+        assert_eq!(split_joined("a{j}b{j}c"), vec!["a", "b", "c"]);
+    }
+
+    #[test]
+    fn split_joined_mixed_forms() {
+        // Some pre-1.6.0 translation entries may still carry a mix after
+        // partial hand-editing; we should handle both markers in one text.
+        let s = r#"a<join at="100">b{j}c"#;
+        assert_eq!(split_joined(s), vec!["a", "b", "c"]);
+    }
+
+    #[test]
+    fn color_codes_from_csv_open_and_close() {
+        assert_eq!(color_codes_from_csv("{c05}Red{/c}"), "~C05Red~C00");
+    }
+
+    #[test]
+    fn color_codes_from_csv_no_markers() {
+        assert_eq!(color_codes_from_csv("plain text"), "plain text");
+    }
+
+    #[test]
+    fn color_codes_from_csv_preserves_utf8() {
+        // Japanese characters are multi-byte UTF-8; byte-level scanning
+        // must not split or corrupt them.
+        assert_eq!(
+            color_codes_from_csv("{c07}ＳＰ防具：青{/c}"),
+            "~C07ＳＰ防具：青~C00"
+        );
+    }
+
+    #[test]
+    fn color_codes_from_csv_non_marker_brace_untouched() {
+        // Unrelated braces should pass through without being mangled.
+        assert_eq!(color_codes_from_csv("{ not a marker }"), "{ not a marker }");
+        assert_eq!(color_codes_from_csv("{cXX}"), "{cXX}");
+    }
+
+    #[test]
+    fn encode_shift_jis_produces_game_color_bytes() {
+        let bytes = encode_shift_jis("{c05}A{/c}");
+        // 0x7E 'C' '0' '5' 'A' 0x7E 'C' '0' '0'
+        assert_eq!(bytes, b"\x7eC05A\x7eC00");
     }
 
     /// End-to-end: build a fixture binary with one pointer-pair section,
