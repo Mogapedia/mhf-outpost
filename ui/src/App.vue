@@ -11,10 +11,23 @@ interface Version {
   name: string
   description: string
   platform: string
+  generation: 'Season' | 'Forward' | 'G' | 'Z' | null
+  released: string | null
+  features: string[]
   has_archive: boolean
   archive_size_gb: number | null
   archive_format: string | null
 }
+
+/// Sidebar groups, shown in this order. Each generation's versions are
+/// sorted newest-first via the order returned by list_versions().
+const GENERATIONS: Array<{ key: 'Z' | 'G' | 'Forward' | 'Season' | 'Other'; label: string }> = [
+  { key: 'Z',       label: 'Z series' },
+  { key: 'G',       label: 'G series' },
+  { key: 'Forward', label: 'Forward' },
+  { key: 'Season',  label: 'Season' },
+  { key: 'Other',   label: 'Other' },
+]
 
 interface CheckItem {
   name: string
@@ -180,6 +193,17 @@ function showToast(text: string, type: 'ok' | 'err' = 'ok') {
 // ── Computed ──────────────────────────────────────────────────────────────────
 
 const selected = computed(() => versions.value.find(v => v.id === selectedId.value) ?? null)
+
+/// Versions grouped by generation, preserving list order (newest-first).
+/// Used by the sidebar to render one collapsible section per generation.
+const versionsByGroup = computed(() => {
+  const groups: Record<string, Version[]> = { Z: [], G: [], Forward: [], Season: [], Other: [] }
+  for (const v of versions.value) {
+    const key = v.generation ?? 'Other'
+    groups[key].push(v)
+  }
+  return groups
+})
 const selectedPath = computed(() => selectedId.value ? (installedPaths.value[selectedId.value] ?? '') : '')
 const isInstalled = computed(() => !!selectedPath.value)
 const isDownloading = computed(() => selectedId.value ? !!downloading.value[selectedId.value] : false)
@@ -331,22 +355,43 @@ async function runChecks() {
     <div class="body">
       <aside class="sidebar" v-if="view === 'library'">
         <div class="version-list">
-          <button
-            v-for="v in versions"
-            :key="v.id"
-            :class="['version-card', v.id === selectedId ? 'selected' : '', installedPaths[v.id] ? 'installed' : '']"
-            @click="selectedId = v.id"
+          <details
+            v-for="g in GENERATIONS"
+            :key="g.key"
+            class="gen-group"
+            :open="g.key === 'Z' || g.key === 'G'"
+            v-show="versionsByGroup[g.key].length > 0"
           >
-            <div class="vc-header">
-              <span class="vc-name">{{ v.name }}</span>
-              <span class="vc-badge" v-if="installedPaths[v.id]">&#10003;</span>
-              <span class="vc-badge dl" v-else-if="downloading[v.id]">&#x2193;</span>
-            </div>
-            <div class="vc-platform">{{ v.platform }}</div>
-            <div class="vc-progress" v-if="downloading[v.id]">
-              <div class="vc-progress-bar" :style="{ width: downloading[v.id].progress + '%' }"></div>
-            </div>
-          </button>
+            <summary class="gen-summary">
+              <span class="gen-label">{{ g.label }}</span>
+              <span class="gen-count">{{ versionsByGroup[g.key].length }}</span>
+            </summary>
+            <button
+              v-for="v in versionsByGroup[g.key]"
+              :key="v.id"
+              :class="[
+                'version-card',
+                v.id === selectedId ? 'selected' : '',
+                installedPaths[v.id] ? 'installed' : '',
+                !v.has_archive ? 'unavailable' : '',
+              ]"
+              @click="selectedId = v.id"
+            >
+              <div class="vc-header">
+                <span class="vc-name">{{ v.name }}</span>
+                <span class="vc-badge" v-if="installedPaths[v.id]">&#10003;</span>
+                <span class="vc-badge dl" v-else-if="downloading[v.id]">&#x2193;</span>
+                <span class="vc-badge missing" v-else-if="!v.has_archive" title="No archive source">?</span>
+              </div>
+              <div class="vc-meta">
+                <span v-if="v.released">{{ v.released }}</span>
+                <span v-else>{{ v.platform }}</span>
+              </div>
+              <div class="vc-progress" v-if="downloading[v.id]">
+                <div class="vc-progress-bar" :style="{ width: downloading[v.id].progress + '%' }"></div>
+              </div>
+            </button>
+          </details>
         </div>
       </aside>
 
@@ -359,6 +404,7 @@ async function runChecks() {
             <h1 class="detail-title">{{ selected.name }}</h1>
             <p class="detail-desc">{{ selected.description }}</p>
             <div class="detail-meta">
+              <span class="meta-tag" v-if="selected.released">Released {{ selected.released }}</span>
               <span class="meta-tag">{{ selected.platform }}</span>
               <span class="meta-tag" v-if="selected.archive_format">{{ selected.archive_format }}</span>
               <span class="meta-tag" v-if="selected.archive_size_gb">
@@ -369,8 +415,32 @@ async function runChecks() {
           </div>
         </div>
 
-        <!-- Install path -->
-        <div class="section">
+        <!-- Changelog / major features -->
+        <div class="section" v-if="selected.features.length > 0">
+          <label class="section-label">Major features</label>
+          <ul class="feature-list">
+            <li v-for="(f, i) in selected.features" :key="i">{{ f }}</li>
+          </ul>
+        </div>
+
+        <!-- Archive-less placeholder banner -->
+        <div class="section missing-archive" v-if="!selected.has_archive">
+          <div class="check-row warning">
+            <div class="check-icon">&#9888;</div>
+            <div class="check-body">
+              <div class="check-name">No archive source yet</div>
+              <div class="check-detail">
+                This version is documented but we don't have a downloadable
+                archive. If you own a copy of the files, please
+                <a href="https://github.com/Mogapedia/mhf-outpost/issues" target="_blank" rel="noopener">open an issue</a>
+                so we can add it to archive.org and wire up the manifest.
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Install path (only when an archive exists) -->
+        <div class="section" v-if="selected.has_archive">
           <label class="section-label">Install path</label>
           <div class="path-row">
             <input class="path-input" :value="selectedPath" readonly placeholder="Not set — click to choose…" @click="pickInstallPath" />
@@ -403,8 +473,8 @@ async function runChecks() {
           </template>
         </div>
 
-        <!-- Action buttons -->
-        <div class="actions">
+        <!-- Action buttons (hidden for archive-less versions that aren't installed) -->
+        <div class="actions" v-if="isInstalled || selected.has_archive">
           <template v-if="isInstalled">
             <button
               class="btn-primary"
@@ -741,7 +811,41 @@ async function runChecks() {
   padding: 8px;
   display: flex;
   flex-direction: column;
-  gap: 4px;
+  gap: 6px;
+}
+
+.gen-group {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.gen-summary {
+  cursor: pointer;
+  padding: 6px 10px;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: .06em;
+  text-transform: uppercase;
+  color: var(--text-dim);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  border-radius: 4px;
+  user-select: none;
+}
+.gen-summary:hover { background: var(--bg-hover); color: var(--text); }
+.gen-summary::-webkit-details-marker { display: none; }
+.gen-summary::marker { content: ''; }
+.gen-group[open] .gen-summary { color: var(--text); }
+
+.gen-count {
+  font-size: 10px;
+  font-weight: 600;
+  color: var(--text-dim);
+  background: var(--bg-card);
+  padding: 1px 7px;
+  border-radius: 10px;
 }
 
 .version-card {
@@ -750,14 +854,26 @@ async function runChecks() {
   border: 1px solid transparent;
   border-radius: 6px;
   padding: 10px 12px;
+  margin-top: 2px;
   text-align: left;
   cursor: pointer;
-  transition: background .12s, border-color .12s;
+  transition: background .12s, border-color .12s, opacity .12s;
 }
 
 .version-card:hover { background: var(--bg-hover); }
 .version-card.selected { border-color: var(--accent); background: var(--bg-hover); }
 .version-card.installed .vc-name { color: var(--ok); }
+
+/* Archive-less versions: quieter, smaller, but still clickable for details. */
+.version-card.unavailable {
+  background: transparent;
+  padding: 6px 10px;
+  opacity: .55;
+}
+.version-card.unavailable:hover { opacity: .85; background: var(--bg-hover); }
+.version-card.unavailable.selected { opacity: 1; }
+.version-card.unavailable .vc-name { font-size: 12px; color: var(--text-dim); font-weight: 500; }
+.version-card.unavailable .vc-meta { font-size: 10px; }
 
 .vc-header {
   display: flex;
@@ -778,8 +894,9 @@ async function runChecks() {
 }
 
 .vc-badge.dl { color: var(--accent); }
+.vc-badge.missing { color: var(--text-dim); font-weight: 600; }
 
-.vc-platform {
+.vc-meta {
   font-size: 11px;
   color: var(--text-dim);
   margin-top: 2px;
@@ -848,6 +965,24 @@ async function runChecks() {
 .meta-tag.no-src { color: var(--err); border-color: var(--err); }
 
 .section { display: flex; flex-direction: column; gap: 8px; }
+
+.feature-list {
+  margin: 0;
+  padding-left: 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.feature-list li {
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--text);
+}
+
+.missing-archive .check-detail a {
+  color: var(--accent);
+  text-decoration: underline;
+}
 
 .section-label {
   font-size: 11px;
