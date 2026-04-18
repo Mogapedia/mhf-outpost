@@ -10,6 +10,7 @@ features    = [
     "HC Rusted Kushala Daora and HC Gurenzeburu",
     "Heavenly Sky Armors (Tenranishi) and Supremacy Quests",
 ]
+languages   = ["ja"]
 
 [archive]
 identifier = "monster-hunter-frontier-forward-4"

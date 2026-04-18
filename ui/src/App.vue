@@ -14,9 +14,24 @@ interface Version {
   generation: 'Season' | 'Forward' | 'G' | 'Z' | null
   released: string | null
   features: string[]
+  languages: string[]
   has_archive: boolean
   archive_size_gb: number | null
   archive_format: string | null
+}
+
+/// Short labels for language codes shown on version cards / detail panes.
+/// MHF's three official regions are JP (Capcom Online Games), TW (Capcom
+/// Taiwan) and KR (Hangame); `en` marks community English fan patches.
+const LANG_LABELS: Record<string, string> = {
+  'ja':    'JP',
+  'zh-TW': 'TW',
+  'zh-CN': 'CN',
+  'ko':    'KR',
+  'en':    'EN',
+}
+function langLabel(code: string): string {
+  return LANG_LABELS[code] ?? code.toUpperCase()
 }
 
 /// Sidebar groups, shown in this order. Each generation's versions are
@@ -406,6 +421,12 @@ async function runChecks() {
             <div class="detail-meta">
               <span class="meta-tag" v-if="selected.released">Released {{ selected.released }}</span>
               <span class="meta-tag">{{ selected.platform }}</span>
+              <span
+                v-for="code in selected.languages"
+                :key="code"
+                class="meta-tag lang-tag"
+                :title="code"
+              >{{ langLabel(code) }}</span>
               <span class="meta-tag" v-if="selected.archive_format">{{ selected.archive_format }}</span>
               <span class="meta-tag" v-if="selected.archive_size_gb">
                 {{ selected.archive_size_gb.toFixed(1) }} GB
@@ -963,6 +984,12 @@ async function runChecks() {
 }
 
 .meta-tag.no-src { color: var(--err); border-color: var(--err); }
+.meta-tag.lang-tag {
+  color: var(--accent);
+  border-color: var(--accent);
+  font-weight: 700;
+  letter-spacing: .04em;
+}
 
 .section { display: flex; flex-direction: column; gap: 8px; }
 

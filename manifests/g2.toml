@@ -8,6 +8,7 @@ released    = "2013-07-10"
 features    = [
     "Anorupatisu, Giaorugu, Lolo Gougarf, Ray Gougarf, Mi Ru, Disufiroa, Rebidiora added",
 ]
+languages   = ["ja"]
 
 [archive]
 identifier = "monster-hunter-frontier-g-2"

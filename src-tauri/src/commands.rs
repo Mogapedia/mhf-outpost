@@ -19,6 +19,10 @@ pub struct VersionDto {
     pub released: Option<String>,
     /// Changelog bullets for the version's major features.
     pub features: Vec<String>,
+    /// Official client localisations shipped in the archive. BCP-47 codes
+    /// (`ja`, `zh-TW`, `ko`, `en` …). Empty when the archive language is not
+    /// yet confirmed.
+    pub languages: Vec<String>,
     pub has_archive: bool,
     pub archive_size_gb: Option<f64>,
     pub archive_format: Option<String>,
@@ -33,6 +37,7 @@ fn version_dto(m: &manifest::Manifest) -> VersionDto {
         generation: m.version.generation.map(|g| format!("{g:?}")),
         released: m.version.released.clone(),
         features: m.version.features.clone(),
+        languages: m.version.languages.clone(),
         has_archive: m.archive.is_some(),
         archive_size_gb: m.archive.as_ref().map(|a| a.size as f64 / 1_073_741_824.0),
         archive_format: m.archive.as_ref().map(|a| a.format.clone()),

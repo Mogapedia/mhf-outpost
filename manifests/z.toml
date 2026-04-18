@@ -10,6 +10,9 @@ features    = [
     "Extreme Style hunting style",
     "True Frenzy Gore Magala",
 ]
+# MHFO.7z bundles both the Japanese (CAPCOM/) and Traditional-Chinese
+# (CAPCOM TAIWAN/) clients; this manifest targets the JP subtree.
+languages   = ["ja", "zh-TW"]
 
 # Vanilla untranslated Japanese MHF-Z snapshot, captured from Capcom Online
 # Games client. Binaries dated 2019-09-09; MHFUP.TMP dated 2019-12-18 (shutdown

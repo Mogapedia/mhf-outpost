@@ -83,6 +83,15 @@ pub struct VersionInfo {
     /// "not yet researched" and will be filled in follow-ups.
     #[serde(default)]
     pub features: Vec<String>,
+    /// Official client localisations shipped in the archive referenced by this
+    /// manifest. MHF had three official regional clients — JP (Capcom Online
+    /// Games), TW (Capcom Taiwan) and KR (Hangame) — and some archives bundle
+    /// more than one (the canonical MHF-Z `MHFO.7z` holds both `CAPCOM/` and
+    /// `CAPCOM TAIWAN/` subtrees). Codes follow BCP-47: `ja`, `zh-TW`, `ko`.
+    /// Fan-translated clients add their patch language (e.g. `en`). Empty
+    /// means "not yet researched".
+    #[serde(default)]
+    pub languages: Vec<String>,
 }
 
 /// Metadata for a canonical archive on archive.org.

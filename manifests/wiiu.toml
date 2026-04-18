@@ -3,6 +3,7 @@ id          = "WIIU"
 name        = "Wii U Z2"
 description = "Wii U G3–Z2 collection (v2064 = latest; Wii U service ended 2018-08-01)"
 platform    = "wiiu"
+languages   = ["ja"]
 
 # The archive.org item contains multiple Wii U versions (G3 through Z2).
 # This manifest targets the latest: Z2 v2064.

@@ -8,6 +8,7 @@ released    = "2014-07-23"
 features    = [
     "Garuba Daora and Inagami introduced in the G5 series",
 ]
+languages   = ["ja"]
 
 [archive]
 identifier = "monster-hunter-frontier-g-5.2"

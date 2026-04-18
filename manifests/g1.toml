@@ -10,6 +10,7 @@ features    = [
     "10 new monsters including Pokara, Pokaradon, Farunokku, Hyujikiki, Midogaron, Shantien",
     "New weapon actions for 11 weapon types, 30 new skills, 4 new elements",
 ]
+languages   = ["ja"]
 
 [archive]
 identifier = "mhfg-1.0"

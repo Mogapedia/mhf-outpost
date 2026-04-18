@@ -10,6 +10,7 @@ features    = [
     "HC Gogomoa and HC Berukyurosu",
     "Rank Match system and Stamp Card collection",
 ]
+languages   = ["ja"]
 
 [archive]
 identifier = "monster-hunter-frontier-forward-5"

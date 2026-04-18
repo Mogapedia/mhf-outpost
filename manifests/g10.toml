@@ -9,6 +9,7 @@ features    = [
     "Voljang, Ruler Guanzorumu and Stygian Zinogre added",
     "Final pre-Z content update (base G10 released 2016-04-21 with Egyurasu, Guanzorumu, Nargacuga)",
 ]
+languages   = ["ja"]
 
 [archive]
 identifier = "mhf-g-10-jp"

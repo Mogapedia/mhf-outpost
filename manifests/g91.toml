@@ -9,6 +9,7 @@ features    = [
     "Furious Rajang — super-class monster",
     "Toa Tesukatora, Howling Zinogre, Uragaan, Thirsty Pariapuria added",
 ]
+languages   = ["ja"]
 
 [archive]
 identifier = "MHFG91"

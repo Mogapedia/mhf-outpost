@@ -9,6 +9,8 @@ features    = [
     "Magnet Spike — melee weapon switching between Slashing and Impact with magnetic abilities",
     "Final content update before the December 2019 server shutdown",
 ]
+# Base client is Japanese; a community English fan patch is applied on top.
+languages   = ["ja", "en"]
 
 # PATCHED DISTRIBUTION. This manifest describes a community-distributed
 # English-patched ZZ client (main binary: mhf-zz.exe, dated 2022-02-03).
