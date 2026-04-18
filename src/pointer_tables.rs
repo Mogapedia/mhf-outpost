@@ -156,10 +156,7 @@ fn parse_config(xpath: &str, node: &Value) -> Result<SectionConfig> {
     let field_offsets: Vec<u32> = match obj.get("field_offset") {
         None => vec![0],
         Some(Value::Number(n)) => vec![n.as_u64().unwrap_or(0) as u32],
-        Some(Value::Array(a)) => a
-            .iter()
-            .map(|v| v.as_u64().unwrap_or(0) as u32)
-            .collect(),
+        Some(Value::Array(a)) => a.iter().map(|v| v.as_u64().unwrap_or(0) as u32).collect(),
         _ => bail!("'{xpath}' has invalid field_offset"),
     };
 
@@ -176,18 +173,12 @@ fn parse_config(xpath: &str, node: &Value) -> Result<SectionConfig> {
                 .get("max_length")
                 .and_then(|v| v.as_u64())
                 .unwrap_or(400) as usize,
-            dedupe: obj
-                .get("dedupe")
-                .and_then(|v| v.as_bool())
-                .unwrap_or(true),
+            dedupe: obj.get("dedupe").and_then(|v| v.as_bool()).unwrap_or(true),
         }
     } else if let Some(nfp) = obj.get("next_field_pointer") {
         Mode::PointerPair {
             next_field_pointer: parse_hex(nfp, "next_field_pointer")?,
-            crop_end: obj
-                .get("crop_end")
-                .and_then(|v| v.as_u64())
-                .unwrap_or(0) as u32,
+            crop_end: obj.get("crop_end").and_then(|v| v.as_u64()).unwrap_or(0) as u32,
         }
     } else if let Some(cp) = obj.get("count_pointer") {
         Mode::CountPointer {
@@ -305,7 +296,9 @@ fn read_indirect_count(
     adjust: i32,
 ) -> Result<u32> {
     let base = read_u32(data, base_ptr)?;
-    let addr = base.checked_add(offset).ok_or_else(|| anyhow!("count addr overflow"))?;
+    let addr = base
+        .checked_add(offset)
+        .ok_or_else(|| anyhow!("count addr overflow"))?;
     let raw = match ty {
         CountType::U16 => read_u16(data, addr)? as u32,
         CountType::U32 => read_u32(data, addr)?,
@@ -396,7 +389,9 @@ pub fn extract(data: &[u8], cfg: &SectionConfig) -> Result<Vec<EntryOffsets>> {
                     if first == 0 {
                         break;
                     }
-                    pos = pos.checked_add(group).ok_or_else(|| anyhow!("ptr overflow"))?;
+                    pos = pos
+                        .checked_add(group)
+                        .ok_or_else(|| anyhow!("ptr overflow"))?;
                 }
                 let length = pos - start;
                 if length == 0 {
@@ -437,7 +432,13 @@ pub fn extract(data: &[u8], cfg: &SectionConfig) -> Result<Vec<EntryOffsets>> {
                 return Ok(vec![]);
             }
             let cat_table = read_u32(data, cfg.begin_pointer)?;
-            read_quest_table(data, cat_table, count, *quest_text_offset, *text_pointers_count)
+            read_quest_table(
+                data,
+                cat_table,
+                count,
+                *quest_text_offset,
+                *text_pointers_count,
+            )
         }
         Mode::ScanRegion {
             next_field_pointer,
@@ -447,7 +448,14 @@ pub fn extract(data: &[u8], cfg: &SectionConfig) -> Result<Vec<EntryOffsets>> {
         } => {
             let region_start = read_u32(data, cfg.begin_pointer)?;
             let region_end = read_u32(data, *next_field_pointer)?;
-            scan_region(data, region_start, region_end, *min_length, *max_length, *dedupe)
+            scan_region(
+                data,
+                region_start,
+                region_end,
+                *min_length,
+                *max_length,
+                *dedupe,
+            )
         }
     }
 }
@@ -489,7 +497,9 @@ fn read_flat_pointer_table(data: &[u8], start: u32, length: u32) -> Result<Vec<E
         if current_id == last_id {
             out.last_mut().unwrap().offsets.push(slot);
         } else {
-            out.push(EntryOffsets { offsets: vec![slot] });
+            out.push(EntryOffsets {
+                offsets: vec![slot],
+            });
             last_id = current_id;
         }
     }
@@ -498,11 +508,7 @@ fn read_flat_pointer_table(data: &[u8], start: u32, length: u32) -> Result<Vec<E
 
 /// Port of `read_multi_pointer_entries`: fixed-size groups, terminator
 /// is a group whose first pointer is 0; null inner pointers are skipped.
-fn read_multi_pointer_entries(
-    data: &[u8],
-    start: u32,
-    ppe: u32,
-) -> Result<Vec<EntryOffsets>> {
+fn read_multi_pointer_entries(data: &[u8], start: u32, ppe: u32) -> Result<Vec<EntryOffsets>> {
     let mut out = Vec::new();
     let mut pos = start;
     loop {
@@ -521,14 +527,20 @@ fn read_multi_pointer_entries(
                 bail!("pointer {ptr:#x} at slot {slot:#x} oob");
             }
             match &mut entry {
-                None => entry = Some(EntryOffsets { offsets: vec![slot] }),
+                None => {
+                    entry = Some(EntryOffsets {
+                        offsets: vec![slot],
+                    })
+                }
                 Some(e) => e.offsets.push(slot),
             }
         }
         if let Some(e) = entry {
             out.push(e);
         }
-        pos = pos.checked_add(ppe * 4).ok_or_else(|| anyhow!("overflow"))?;
+        pos = pos
+            .checked_add(ppe * 4)
+            .ok_or_else(|| anyhow!("overflow"))?;
     }
     Ok(out)
 }
@@ -553,7 +565,9 @@ fn read_struct_strided(
             if (ptr as usize) >= data.len() {
                 bail!("pointer {ptr:#x} at slot {slot:#x} oob");
             }
-            out.push(EntryOffsets { offsets: vec![slot] });
+            out.push(EntryOffsets {
+                offsets: vec![slot],
+            });
         }
     }
     Ok(out)
@@ -598,7 +612,11 @@ fn read_quest_table(
                     bail!("quest string ptr {sp:#x} oob");
                 }
                 match &mut entry {
-                    None => entry = Some(EntryOffsets { offsets: vec![slot] }),
+                    None => {
+                        entry = Some(EntryOffsets {
+                            offsets: vec![slot],
+                        })
+                    }
                     Some(e) => e.offsets.push(slot),
                 }
             }
@@ -670,7 +688,9 @@ fn scan_region(
             slot += 4;
             continue;
         }
-        out.push(EntryOffsets { offsets: vec![slot] });
+        out.push(EntryOffsets {
+            offsets: vec![slot],
+        });
         slot += 4;
     }
     Ok(out)

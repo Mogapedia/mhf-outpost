@@ -225,11 +225,11 @@ fn download_asset(client: &reqwest::blocking::Client, asset: &Asset, dest: &Path
 
 /// Stream-decompress a gzipped file to a plain file next to it.
 fn decompress_gzip(src: &Path, dest: &Path) -> Result<()> {
-    let input = std::fs::File::open(src)
-        .with_context(|| format!("cannot open {}", src.display()))?;
+    let input =
+        std::fs::File::open(src).with_context(|| format!("cannot open {}", src.display()))?;
     let mut decoder = GzDecoder::new(input);
-    let mut output = std::fs::File::create(dest)
-        .with_context(|| format!("cannot create {}", dest.display()))?;
+    let mut output =
+        std::fs::File::create(dest).with_context(|| format!("cannot create {}", dest.display()))?;
     std::io::copy(&mut decoder, &mut output)?;
     Ok(())
 }

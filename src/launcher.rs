@@ -37,7 +37,10 @@ pub fn extract_launcher(dest: &Path) -> Result<()> {
     } else {
         std::fs::write(&out, MHF_IEL_CLI_EXE)
             .with_context(|| format!("cannot write '{}'", out.display()))?;
-        println!("  ✓ wrote mhf-iel-cli.exe ({} bytes)", MHF_IEL_CLI_EXE.len());
+        println!(
+            "  ✓ wrote mhf-iel-cli.exe ({} bytes)",
+            MHF_IEL_CLI_EXE.len()
+        );
 
         #[cfg(unix)]
         {
