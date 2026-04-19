@@ -1,3 +1,7 @@
+<p align="center">
+  <img src="src-tauri/icons/icon.png" alt="MHF Launcher" width="200">
+</p>
+
 # mhf-outpost
 
 GUI installer and launcher for Monster Hunter Frontier, part of the [Mogapedia](https://mogapedia.fr) preservation ecosystem.
