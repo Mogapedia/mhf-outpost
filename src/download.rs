@@ -45,12 +45,15 @@ pub fn run(manifest: &Manifest, opts: DownloadOptions) -> Result<()> {
         prompt_disclaimer(&manifest.version.name)?;
     }
 
-    std::fs::create_dir_all(&opts.dest)
-        .with_context(|| format!("cannot create '{}'", opts.dest.display()))?;
-
     let archive_path = opts
         .archive_path
+        .clone()
         .unwrap_or_else(|| opts.dest.join(&archive.filename));
+
+    check_dest_safe(&opts.dest, &archive_path)?;
+
+    std::fs::create_dir_all(&opts.dest)
+        .with_context(|| format!("cannot create '{}'", opts.dest.display()))?;
 
     // ── 1. Download ───────────────────────────────────────────────────────────
     download_file(archive, &archive_path, opts.on_progress.as_ref())?;
@@ -93,6 +96,70 @@ pub fn run(manifest: &Manifest, opts: DownloadOptions) -> Result<()> {
         opts.dest.display()
     );
     Ok(())
+}
+
+// ── Destination safety check ─────────────────────────────────────────────────
+
+/// Refuse to install into a directory we don't recognise. Allowed shapes:
+///
+/// 1. Non-existent or empty directory — fresh install.
+/// 2. Directory holding an existing MHF install (an `mhf.exe` is present at
+///    the root or one level below). Re-installing on top of itself is fine
+///    because the archive contains the same files.
+/// 3. Directory whose only contents are the in-progress archive (`<filename>`
+///    or `<filename>.part`) — happens when a previous run downloaded the
+///    archive but was interrupted before extraction.
+///
+/// Anything else (the user picked `~/Documents`, their desktop, an unrelated
+/// project folder…) is rejected with a message that names the offending entry
+/// so they understand what we're protecting them from.
+fn check_dest_safe(dest: &Path, archive_path: &Path) -> Result<()> {
+    let entries = match std::fs::read_dir(dest) {
+        Ok(it) => it,
+        Err(_) => return Ok(()), // dest doesn't exist yet — we'll create it
+    };
+
+    let archive_name = archive_path.file_name();
+    let mut foreign: Option<String> = None;
+    let mut has_mhf_exe = false;
+
+    for entry in entries.flatten() {
+        let name = entry.file_name();
+        let name_str = name.to_string_lossy().to_string();
+
+        if name_str.eq_ignore_ascii_case("mhf.exe") {
+            has_mhf_exe = true;
+            continue;
+        }
+        // One-level-down check (extracted archives often have a top-level dir).
+        if entry.file_type().map(|t| t.is_dir()).unwrap_or(false)
+            && entry.path().join("mhf.exe").exists()
+        {
+            has_mhf_exe = true;
+            continue;
+        }
+        // The archive itself, or a partial download next to it.
+        if let Some(an) = archive_name {
+            if name == an || name_str == format!("{}.part", an.to_string_lossy()) {
+                continue;
+            }
+        }
+        if foreign.is_none() {
+            foreign = Some(name_str);
+        }
+    }
+
+    if has_mhf_exe || foreign.is_none() {
+        return Ok(());
+    }
+
+    bail!(
+        "install folder '{}' is not empty (contains '{}' and possibly other files).\n\
+         Refusing to extract on top of unknown contents.\n\
+         Pick an empty folder, or delete the existing contents first.",
+        dest.display(),
+        foreign.unwrap()
+    );
 }
 
 // ── Disclaimer ────────────────────────────────────────────────────────────────
@@ -424,4 +491,87 @@ fn safe_join(base: &Path, rel: &Path) -> Result<PathBuf> {
         }
     }
     Ok(out)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn fresh_dir(tag: &str) -> PathBuf {
+        let mut p = std::env::temp_dir();
+        p.push(format!(
+            "mhf_outpost_dest_{tag}_{}",
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap()
+                .as_nanos()
+        ));
+        let _ = std::fs::remove_dir_all(&p);
+        p
+    }
+
+    fn touch(path: &Path) {
+        if let Some(parent) = path.parent() {
+            std::fs::create_dir_all(parent).unwrap();
+        }
+        std::fs::File::create(path).unwrap();
+    }
+
+    #[test]
+    fn safe_when_dest_missing() {
+        let dest = fresh_dir("missing");
+        assert!(check_dest_safe(&dest, &dest.join("mhfo.7z")).is_ok());
+    }
+
+    #[test]
+    fn safe_when_dest_empty() {
+        let dest = fresh_dir("empty");
+        std::fs::create_dir_all(&dest).unwrap();
+        assert!(check_dest_safe(&dest, &dest.join("mhfo.7z")).is_ok());
+        std::fs::remove_dir_all(&dest).ok();
+    }
+
+    #[test]
+    fn safe_when_existing_install_at_root() {
+        let dest = fresh_dir("install_root");
+        touch(&dest.join("mhf.exe"));
+        touch(&dest.join("dat").join("foo.bin"));
+        assert!(check_dest_safe(&dest, &dest.join("mhfo.7z")).is_ok());
+        std::fs::remove_dir_all(&dest).ok();
+    }
+
+    #[test]
+    fn safe_when_existing_install_in_subdir() {
+        let dest = fresh_dir("install_sub");
+        touch(&dest.join("MHFO").join("mhf.exe"));
+        assert!(check_dest_safe(&dest, &dest.join("mhfo.7z")).is_ok());
+        std::fs::remove_dir_all(&dest).ok();
+    }
+
+    #[test]
+    fn safe_when_only_archive_present() {
+        let dest = fresh_dir("archive_only");
+        let archive = dest.join("mhfo.7z");
+        touch(&archive);
+        assert!(check_dest_safe(&dest, &archive).is_ok());
+        std::fs::remove_dir_all(&dest).ok();
+    }
+
+    #[test]
+    fn safe_when_partial_download_present() {
+        let dest = fresh_dir("partial");
+        let archive = dest.join("mhfo.7z");
+        touch(&dest.join("mhfo.7z.part"));
+        assert!(check_dest_safe(&dest, &archive).is_ok());
+        std::fs::remove_dir_all(&dest).ok();
+    }
+
+    #[test]
+    fn rejects_unrelated_files() {
+        let dest = fresh_dir("foreign");
+        touch(&dest.join("notes.txt"));
+        let err = check_dest_safe(&dest, &dest.join("mhfo.7z")).unwrap_err();
+        assert!(err.to_string().contains("notes.txt"));
+        std::fs::remove_dir_all(&dest).ok();
+    }
 }
