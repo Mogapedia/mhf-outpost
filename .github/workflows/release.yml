@@ -60,5 +60,5 @@ jobs:
             - **Linux**: `.deb`, `.rpm`, `.AppImage`
             - **Windows**: `.msi` (WiX), `.exe` (NSIS)
 
-            See the repository's CHANGELOG (if present) or the commit log between
-            this tag and the previous one for details.
+            See [CHANGELOG.md](https://github.com/${{ github.repository }}/blob/${{ github.ref_name }}/CHANGELOG.md)
+            for the full list of changes.
