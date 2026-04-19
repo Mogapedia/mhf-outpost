@@ -1,0 +1,21 @@
+<svg viewBox="0 0 256 256" xmlns="http://www.w3.org/2000/svg">
+  <rect width="256" height="256" fill="#0f1117"/>
+  <!-- flagpole -->
+  <rect x="64" y="32" width="10" height="200" fill="#c9a84c"/>
+  <circle cx="69" cy="32" r="10" fill="#c9a84c"/>
+  <rect x="48" y="228" width="42" height="8" fill="#c9a84c"/>
+  <!-- rectangular flag, no notch — bolder -->
+  <rect x="74" y="52" width="134" height="84" fill="#c9a84c"/>
+  <!-- bold "F" cut into the flag (negative space) -->
+  <path d="M 100 70
+           L 184 70
+           L 184 84
+           L 116 84
+           L 116 96
+           L 168 96
+           L 168 110
+           L 116 110
+           L 116 124
+           L 100 124 Z"
+        fill="#0f1117"/>
+</svg>

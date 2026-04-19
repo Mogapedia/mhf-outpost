@@ -1,0 +1,37 @@
+<svg viewBox="0 0 256 256" xmlns="http://www.w3.org/2000/svg">
+  <rect width="256" height="256" fill="#0f1117"/>
+  <!-- pennant on top of balloon -->
+  <line x1="120" y1="20" x2="120" y2="46" stroke="#c9a84c" stroke-width="3" stroke-linecap="round"/>
+  <path d="M 120 22 L 144 28 L 120 34 Z" fill="#c9a84c"/>
+  <!-- horizontal cigar balloon, slightly offset left to leave room for the propeller -->
+  <path d="M 16 110
+           C 16 84, 48 64, 88 64
+           L 152 64
+           C 192 64, 224 84, 224 110
+           C 224 136, 192 156, 152 156
+           L 88 156
+           C 48 156, 16 136, 16 110 Z"
+        fill="#c9a84c"/>
+  <!-- decorative bands -->
+  <line x1="88"  y1="64" x2="88"  y2="156" stroke="#0f1117" stroke-width="3"/>
+  <line x1="152" y1="64" x2="152" y2="156" stroke="#0f1117" stroke-width="3"/>
+  <!-- ropes down to the hull -->
+  <line x1="72"  y1="156" x2="76"  y2="184" stroke="#c9a84c" stroke-width="3" stroke-linecap="round"/>
+  <line x1="100" y1="156" x2="98"  y2="184" stroke="#c9a84c" stroke-width="3" stroke-linecap="round"/>
+  <line x1="140" y1="156" x2="142" y2="184" stroke="#c9a84c" stroke-width="3" stroke-linecap="round"/>
+  <line x1="168" y1="156" x2="164" y2="184" stroke="#c9a84c" stroke-width="3" stroke-linecap="round"/>
+  <!-- boat-hull gondola -->
+  <path d="M 68 184
+           L 172 184
+           L 166 212
+           Q 120 236 74 212 Z"
+        fill="#c9a84c"/>
+  <line x1="78" y1="200" x2="162" y2="200" stroke="#0f1117" stroke-width="2"/>
+  <!-- propeller mount: short bar trailing the hull -->
+  <rect x="172" y="194" width="16" height="6" fill="#c9a84c"/>
+  <!-- propeller: outer disc + crosshair, reads as a fan even at icon size -->
+  <circle cx="206" cy="197" r="18" fill="none" stroke="#c9a84c" stroke-width="4"/>
+  <line x1="206" y1="183" x2="206" y2="211" stroke="#c9a84c" stroke-width="4" stroke-linecap="round"/>
+  <line x1="192" y1="197" x2="220" y2="197" stroke="#c9a84c" stroke-width="4" stroke-linecap="round"/>
+  <circle cx="206" cy="197" r="3" fill="#c9a84c"/>
+</svg>

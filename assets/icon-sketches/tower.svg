@@ -1,0 +1,32 @@
+<svg viewBox="0 0 256 256" xmlns="http://www.w3.org/2000/svg">
+  <rect width="256" height="256" fill="#0f1117"/>
+  <!-- top pennant flying off the spire -->
+  <line x1="128" y1="20" x2="128" y2="56" stroke="#c9a84c" stroke-width="4" stroke-linecap="round"/>
+  <path d="M 128 24 L 158 32 L 128 40 Z" fill="#c9a84c"/>
+  <!-- conical roof -->
+  <path d="M 88 96 L 128 56 L 168 96 Z" fill="#c9a84c"/>
+  <!-- top tier (lookout, slightly wider than middle) -->
+  <rect x="80" y="96" width="96" height="22" fill="#c9a84c"/>
+  <!-- crenellation hints on top tier -->
+  <rect x="86"  y="92" width="10" height="8" fill="#c9a84c"/>
+  <rect x="106" y="92" width="10" height="8" fill="#c9a84c"/>
+  <rect x="126" y="92" width="10" height="8" fill="#c9a84c"/>
+  <rect x="146" y="92" width="10" height="8" fill="#c9a84c"/>
+  <rect x="166" y="92" width="10" height="8" fill="#c9a84c"/>
+  <!-- middle tier -->
+  <rect x="100" y="118" width="56" height="62" fill="#c9a84c"/>
+  <!-- arched window -->
+  <path d="M 118 148
+           L 118 138
+           Q 128 128 138 138
+           L 138 148 Z"
+        fill="#0f1117"/>
+  <!-- base tier -->
+  <rect x="88" y="180" width="80" height="48" fill="#c9a84c"/>
+  <!-- arched door -->
+  <path d="M 116 228
+           L 116 200
+           Q 128 192 140 200
+           L 140 228 Z"
+        fill="#0f1117"/>
+</svg>

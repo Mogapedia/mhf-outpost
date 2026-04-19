@@ -1,0 +1,23 @@
+<svg viewBox="0 0 256 256" xmlns="http://www.w3.org/2000/svg">
+  <rect width="256" height="256" fill="#0f1117"/>
+  <!-- flagpole -->
+  <rect x="64" y="32" width="10" height="200" fill="#c9a84c"/>
+  <!-- finial: small ball cap -->
+  <circle cx="69" cy="32" r="10" fill="#c9a84c"/>
+  <!-- ground hint: small base -->
+  <rect x="48" y="228" width="42" height="8" fill="#c9a84c"/>
+  <!-- flag with notched fly end (swallowtail) -->
+  <path d="M 74 52
+           L 208 52
+           L 184 88
+           L 208 124
+           L 74 124 Z"
+        fill="#c9a84c"/>
+  <!-- chevron mark inside flag (Frontier-ish wedge) -->
+  <path d="M 100 76 L 134 102 L 168 76"
+        stroke="#0f1117"
+        stroke-width="12"
+        fill="none"
+        stroke-linecap="round"
+        stroke-linejoin="round"/>
+</svg>
