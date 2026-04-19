@@ -44,6 +44,11 @@ const GENERATIONS: Array<{ key: 'Z' | 'G' | 'Forward' | 'Season' | 'Other'; labe
   { key: 'Other',   label: 'Other' },
 ]
 
+/// Version we suggest to first-time users: the latest content patch with the
+/// most active community translations. Drives the "Recommended" badge in the
+/// sidebar and the "Get started" CTA on the welcome screen.
+const RECOMMENDED_ID = 'ZZ'
+
 interface CheckItem {
   name: string
   status: 'ok' | 'warning' | 'error'
@@ -140,6 +145,15 @@ const lastPlayedId = ref<string | null>(localStorage.getItem('lastPlayedId'))
 function saveLastPlayed(id: string) {
   lastPlayedId.value = id
   localStorage.setItem('lastPlayedId', id)
+}
+
+// First-run welcome screen. Shown when the user has neither dismissed it nor
+// installed any version yet — once either is true, the launcher goes straight
+// to the Library on subsequent opens.
+const welcomeDismissed = ref(localStorage.getItem('welcomeDismissed') === '1')
+function dismissWelcome() {
+  welcomeDismissed.value = true
+  localStorage.setItem('welcomeDismissed', '1')
 }
 
 // System checks
@@ -305,6 +319,15 @@ const quickPlayReady = computed(() =>
   !!lastPlayed.value && isAuthenticated.value && !downloading.value[lastPlayed.value.id]
 )
 
+// Welcome is shown when nothing has been installed yet AND the user hasn't
+// explicitly dismissed it. Either condition flipping (an install appearing,
+// or the user clicking "Browse versions") hides it permanently.
+const hasAnyInstall = computed(() => Object.keys(installedPaths.value).length > 0)
+const showWelcome = computed(() => !welcomeDismissed.value && !hasAnyInstall.value)
+const recommendedVersion = computed(() =>
+  versions.value.find(v => v.id === RECOMMENDED_ID) ?? null
+)
+
 // ── Lifecycle ────────────────────────────────────────────────────────────────
 
 onMounted(async () => {
@@ -332,6 +355,18 @@ async function pickInstallPath() {
     installedPaths.value[selectedId.value] = dir as string
     savePaths()
   }
+}
+
+/// Welcome-screen "Get started" path: dismiss the screen, jump to the
+/// recommended version, and open the install folder picker so the user
+/// lands one click away from the download starting.
+async function startGuidedSetup() {
+  dismissWelcome()
+  view.value = 'library'
+  if (recommendedVersion.value) {
+    selectedId.value = recommendedVersion.value.id
+  }
+  await startDownload()
 }
 
 async function startDownload() {
@@ -476,8 +511,74 @@ async function runChecks() {
       </button>
     </header>
 
+    <!-- First-run welcome screen: takes over the body when no installs exist
+         and the user hasn't dismissed it. Shown above all other content. -->
+    <Transition name="pane" mode="out-in">
+    <section v-if="showWelcome" class="welcome-screen">
+      <div class="welcome-card">
+        <h1 class="welcome-title">Welcome to MHF Launcher</h1>
+        <p class="welcome-tagline">
+          Monster Hunter Frontier was Capcom's MMORPG, shut down on
+          2019-12-18. This launcher reconnects the original game client
+          to a community-run <strong>Erupe</strong> server so the game can be
+          played again, in service of preservation.
+        </p>
+
+        <ol class="welcome-steps">
+          <li>
+            <span class="step-num">1</span>
+            <div>
+              <div class="step-name">Install the game files</div>
+              <div class="step-desc">
+                Download a verified archive from archive.org. We recommend
+                <strong>{{ recommendedVersion?.name ?? 'MHF-ZZ' }}</strong>
+                <span v-if="recommendedVersion?.archive_size_gb">
+                  ({{ recommendedVersion.archive_size_gb.toFixed(1) }} GB)
+                </span>
+                — the latest content patch with the most active community.
+              </div>
+            </div>
+          </li>
+          <li>
+            <span class="step-num">2</span>
+            <div>
+              <div class="step-name">Sign in to a server</div>
+              <div class="step-desc">
+                Register a free account on any Erupe-compatible server, then
+                pick or create a character. No password is ever stored on disk.
+              </div>
+            </div>
+          </li>
+          <li>
+            <span class="step-num">3</span>
+            <div>
+              <div class="step-name">Play</div>
+              <div class="step-desc">
+                Click Play. After your first launch, a quick-play button stays
+                pinned to the top bar so you can jump back in instantly.
+              </div>
+            </div>
+          </li>
+        </ol>
+
+        <div class="welcome-actions">
+          <button class="btn-primary welcome-cta" @click="startGuidedSetup">
+            &#x2B07; Install {{ recommendedVersion?.name ?? 'MHF-ZZ' }}
+          </button>
+          <button class="btn-outline" @click="dismissWelcome">
+            Browse all versions
+          </button>
+        </div>
+
+        <p class="welcome-note">
+          MHF is © Capcom Co., Ltd. and is no longer commercially available.
+          You are responsible for compliance with the laws of your country.
+        </p>
+      </div>
+    </section>
+
     <!-- Body: version sidebar (Library only) + content -->
-    <div class="body">
+    <div class="body" v-else>
       <aside class="sidebar" v-if="view === 'library'">
         <div class="version-list">
           <div
@@ -519,6 +620,11 @@ async function runChecks() {
                     <span class="vc-badge" v-if="installedPaths[v.id]">&#10003;</span>
                     <span class="vc-badge dl" v-else-if="downloading[v.id]">&#x2193;</span>
                     <span class="vc-badge missing" v-else-if="!v.has_archive" title="No archive source">?</span>
+                    <span
+                      v-else-if="v.id === RECOMMENDED_ID"
+                      class="vc-badge recommended"
+                      title="Recommended for new players"
+                    >★</span>
                   </div>
                   <div class="vc-meta">
                     <span v-if="v.released">{{ v.released }}</span>
@@ -864,6 +970,7 @@ async function runChecks() {
         </Transition>
       </main>
     </div>
+    </Transition>
 
     <!-- Toast -->
     <div :class="['toast', toast?.type]" v-if="toast">{{ toast.text }}</div>
@@ -1591,4 +1698,97 @@ async function runChecks() {
 .toast.err { border-color: var(--err); color: var(--err); }
 
 @keyframes fadein { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
+
+/* ── Welcome screen ── */
+.welcome-screen {
+  display: flex;
+  align-items: flex-start;
+  justify-content: center;
+  padding: 48px 24px;
+  overflow-y: auto;
+  background: var(--bg-deep);
+}
+
+.welcome-card {
+  width: 100%;
+  max-width: 640px;
+  background: var(--bg-panel);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 32px 36px;
+  box-shadow: 0 8px 32px rgba(0,0,0,.4);
+}
+
+.welcome-title {
+  font-size: 22px;
+  font-weight: 700;
+  color: var(--accent);
+  letter-spacing: .02em;
+  margin-bottom: 10px;
+}
+
+.welcome-tagline {
+  font-size: 13px;
+  line-height: 1.55;
+  color: var(--text-dim);
+  margin-bottom: 24px;
+}
+.welcome-tagline strong { color: var(--text); font-weight: 600; }
+
+.welcome-steps {
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  margin-bottom: 28px;
+  padding: 0;
+}
+.welcome-steps li {
+  display: flex;
+  gap: 14px;
+  align-items: flex-start;
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 14px 16px;
+}
+
+.step-num {
+  flex: 0 0 28px;
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  background: var(--accent);
+  color: #1a1400;
+  font-weight: 700;
+  font-size: 13px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.step-name { font-weight: 600; font-size: 13px; margin-bottom: 2px; }
+.step-desc { font-size: 12px; color: var(--text-dim); line-height: 1.5; }
+.step-desc strong { color: var(--text); font-weight: 600; }
+
+.welcome-actions {
+  display: flex;
+  gap: 10px;
+  margin-bottom: 16px;
+}
+.welcome-cta { font-size: 14px; padding: 10px 18px; }
+
+.welcome-note {
+  font-size: 11px;
+  color: var(--text-dim);
+  line-height: 1.5;
+  padding-top: 12px;
+  border-top: 1px solid var(--border);
+}
+
+/* Recommended badge in the sidebar version cards. */
+.vc-badge.recommended {
+  color: var(--accent);
+  font-size: 13px;
+}
 </style>
