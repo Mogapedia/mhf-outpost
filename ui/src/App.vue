@@ -2,7 +2,7 @@
 import { ref, computed, onMounted } from 'vue'
 import { invoke } from '@tauri-apps/api/core'
 import { listen } from '@tauri-apps/api/event'
-import { open } from '@tauri-apps/plugin-dialog'
+import { open, ask } from '@tauri-apps/plugin-dialog'
 
 // ── Types ────────────────────────────────────────────────────────────────────
 
@@ -70,7 +70,7 @@ interface CharDto { id: number; name: string; hr: number; gr: number; is_female:
 
 const versions = ref<Version[]>([])
 const selectedId = ref<string | null>(null)
-const view = ref<'library' | 'server' | 'translations' | 'checks'>('library')
+const view = ref<'library' | 'server' | 'translations' | 'checks' | 'settings'>('library')
 
 // Sidebar generation groups: Z and G open by default; older tiers collapsed.
 const openGroups = ref<Record<string, boolean>>({
@@ -474,6 +474,27 @@ async function runChecks() {
     checksLoading.value = false
   }
 }
+
+/// Wipe every launcher-owned key from localStorage and reload, returning the
+/// app to its first-run state (welcome screen reappears, paths/auth/server
+/// preferences forgotten). The game files on disk are deliberately left
+/// untouched — this only resets the launcher, not the install.
+async function clearAllData() {
+  const confirmed = await ask(
+    'This will erase remembered install paths, the last-played version, ' +
+    'server preferences, and dismiss-flags. Your downloaded game files on ' +
+    'disk are not touched. Continue?',
+    { title: 'Remove all launcher data', kind: 'warning' }
+  )
+  if (!confirmed) return
+  for (const key of [
+    'installedPaths', 'lastPlayedId', 'welcomeDismissed',
+    'serverUrl', 'transLang', 'transRepo',
+  ]) {
+    localStorage.removeItem(key)
+  }
+  window.location.reload()
+}
 </script>
 
 <template>
@@ -494,6 +515,9 @@ async function runChecks() {
         </button>
         <button :class="['nav-tab', view === 'checks' ? 'active' : '']" @click="view = 'checks'; runChecks()">
           Checks
+        </button>
+        <button :class="['nav-tab', view === 'settings' ? 'active' : '']" @click="view = 'settings'">
+          Settings
         </button>
       </nav>
       <!-- Quick-play: visible once the user has launched at least once -->
@@ -963,6 +987,48 @@ async function runChecks() {
 
         <div class="empty-state" v-else-if="!checksLoading">
           Click "Run checks" to validate your system configuration.
+        </div>
+      </div>
+
+      <!-- Settings view -->
+      <div class="settings-pane" v-if="view === 'settings'">
+        <div class="section">
+          <label class="section-label">About</label>
+          <p class="settings-about">
+            <strong>MHF Launcher</strong> is a community tool that lets you
+            install and play <strong>Monster Hunter Frontier</strong> again,
+            in your preferred language, on a community-run server. The
+            original game was shut down by Capcom on 2019-12-18; this
+            launcher exists to keep it accessible for preservation.
+          </p>
+          <p class="settings-about">
+            It downloads verified game archives from
+            <a href="https://archive.org" target="_blank" rel="noopener">archive.org</a>,
+            authenticates against any
+            <a href="https://github.com/Mezeporta/Erupe" target="_blank" rel="noopener">Erupe</a>
+            server, and applies community translations from
+            <a href="https://github.com/mogapedia/MHFrontier-Translation" target="_blank" rel="noopener">MHFrontier-Translation</a>
+            so you can play in French, English, or any other supported
+            language. Built by the
+            <a href="https://mogapedia.fr" target="_blank" rel="noopener">Mogapedia</a>
+            preservation project.
+          </p>
+        </div>
+
+        <div class="section">
+          <label class="section-label">Data</label>
+          <div class="settings-row">
+            <div class="settings-row-body">
+              <div class="settings-row-name">Remove all launcher data</div>
+              <div class="settings-row-desc">
+                Forgets remembered install paths, the last-played version,
+                server URL, and language preferences. The welcome screen
+                will reappear on the next launch.
+                <strong>Your downloaded game files on disk are not deleted.</strong>
+              </div>
+            </div>
+            <button class="btn-danger" @click="clearAllData">Remove…</button>
+          </div>
         </div>
       </div>
 
@@ -1441,6 +1507,17 @@ async function runChecks() {
 
 .btn-outline:hover { border-color: var(--text-dim); color: var(--text); }
 
+.btn-danger {
+  background: transparent;
+  border: 1px solid var(--err);
+  color: var(--err);
+  padding: 10px 16px;
+  border-radius: 6px;
+  font-weight: 600;
+  transition: background .15s, color .15s;
+}
+.btn-danger:hover { background: var(--err); color: var(--bg-deep); }
+
 .info-box {
   background: var(--bg-card);
   border: 1px solid var(--border);
@@ -1791,4 +1868,42 @@ async function runChecks() {
   color: var(--accent);
   font-size: 13px;
 }
+
+/* ── Settings pane ── */
+.settings-pane {
+  padding: 32px 40px;
+  max-width: 720px;
+  display: flex;
+  flex-direction: column;
+  gap: 28px;
+}
+
+.settings-about {
+  font-size: 13px;
+  line-height: 1.6;
+  color: var(--text-dim);
+  margin-bottom: 12px;
+}
+.settings-about:last-child { margin-bottom: 0; }
+.settings-about strong { color: var(--text); font-weight: 600; }
+.settings-about a { color: var(--accent); text-decoration: none; }
+.settings-about a:hover { text-decoration: underline; }
+
+.settings-row {
+  display: flex;
+  gap: 16px;
+  align-items: center;
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 14px 16px;
+}
+.settings-row-body { flex: 1; min-width: 0; }
+.settings-row-name { font-weight: 600; font-size: 13px; margin-bottom: 4px; }
+.settings-row-desc {
+  font-size: 12px;
+  color: var(--text-dim);
+  line-height: 1.5;
+}
+.settings-row-desc strong { color: var(--text); font-weight: 600; }
 </style>
