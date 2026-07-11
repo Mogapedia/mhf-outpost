@@ -1,3 +1,4 @@
+mod auth;
 mod check;
 mod download;
 mod ecd;
@@ -71,6 +72,39 @@ enum Command {
         /// Game directory to exclude.
         #[arg(short, long)]
         path: PathBuf,
+    },
+
+    /// Authenticate against an Erupe server and write config.json.
+    ///
+    /// Headless equivalent of the GUI's login screen: calls the same
+    /// authenticate/select-character/save_config flow. Picks the first
+    /// existing character by default, or creates one if the account has none.
+    Login {
+        /// Erupe server base URL (e.g. https://frontier.example.com).
+        #[arg(short, long)]
+        server: String,
+
+        #[arg(short, long)]
+        username: String,
+
+        #[arg(short, long)]
+        password: String,
+
+        /// Game directory to write config.json into.
+        #[arg(long)]
+        path: PathBuf,
+
+        /// Register a new account instead of logging into an existing one.
+        #[arg(long)]
+        register: bool,
+
+        /// Use a specific existing character id instead of the first one.
+        #[arg(long)]
+        char_id: Option<u32>,
+
+        /// Game version manifest ID written into config.json (e.g. zz, gg, f4).
+        #[arg(short = 'V', long, default_value = "ZZ")]
+        game_version: String,
     },
 
     /// Download and install a game version from archive.org.
@@ -200,6 +234,23 @@ fn main() -> Result<()> {
     let cli = Cli::parse();
     match cli.command {
         Command::Check { path } => cmd_check(path.as_deref()),
+        Command::Login {
+            server,
+            username,
+            password,
+            path,
+            register,
+            char_id,
+            game_version,
+        } => cmd_login(
+            &server,
+            &username,
+            &password,
+            &path,
+            register,
+            char_id,
+            &game_version,
+        ),
         Command::ExtractLauncher { path } => launcher::extract_launcher(&path),
         Command::Launch { path, auth } => launcher::launch(&path, auth),
         Command::AvExclude { path } => launcher::av_exclude(&path),
@@ -241,6 +292,49 @@ fn main() -> Result<()> {
             toml,
         } => cmd_hash_dir(&path, &exclude, toml),
     }
+}
+
+// ── login ─────────────────────────────────────────────────────────────────────
+
+fn cmd_login(
+    server: &str,
+    username: &str,
+    password: &str,
+    path: &Path,
+    register: bool,
+    char_id: Option<u32>,
+    game_version: &str,
+) -> Result<()> {
+    let action = if register { "register" } else { "login" };
+    let login = auth::authenticate(server, action, username, password)?;
+
+    let (id, char_data) = match char_id {
+        Some(id) => {
+            let c = login
+                .characters
+                .iter()
+                .find(|c| c.id == id)
+                .ok_or_else(|| anyhow::anyhow!("character {id} not found on this account"))?;
+            (c.id, c.clone())
+        }
+        None => match login.characters.first() {
+            Some(c) => (c.id, c.clone()),
+            None => {
+                let c = auth::create_character(server, &login.user.token)?;
+                (c.id, c)
+            }
+        },
+    };
+
+    auth::save_config(path, server, &login, id, &char_data, game_version)?;
+    println!(
+        "Authenticated as '{}' (HR{} GR{}) — config.json written to {}",
+        char_data.name,
+        char_data.hr,
+        char_data.gr,
+        path.join("config.json").display()
+    );
+    Ok(())
 }
 
 // ── check ─────────────────────────────────────────────────────────────────────
