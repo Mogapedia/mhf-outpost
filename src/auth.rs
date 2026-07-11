@@ -76,8 +76,34 @@ pub struct MezFes {
 
 // ── config.json format (matches mhf-iel MhfConfig exactly) ──────────────────
 
+/// Mirrors mhf-iel's `Notice { flags: u16, data: String }` — the Erupe API only
+/// gives us plain strings, so `flags` is always written as 0.
+#[derive(Debug, Serialize)]
+pub struct NoticeOut {
+    pub flags: u16,
+    pub data: String,
+}
+
+/// mhf-iel's `MezFesStall` is a fieldless enum with explicit u32 discriminants;
+/// serde's default derive serializes it as the variant *name*, not the number.
+/// Maps Erupe's raw stall IDs to those variant names, dropping unknown IDs.
+fn mez_fes_stall_name(id: u32) -> Option<&'static str> {
+    Some(match id {
+        2 => "TokotokoPartnya",
+        3 => "Pachinko",
+        4 => "VolpakkunTogether",
+        5 => "GoocooScoop",
+        6 => "Nyanrendo",
+        7 => "HoneyPanic",
+        8 => "DokkanBattleCats",
+        9 => "PointStall",
+        10 => "StallMap",
+        _ => return None,
+    })
+}
+
 /// Written to `config.json` in the game folder.
-/// Field names must match mhf-iel's MhfConfig serde output.
+/// Field names and shapes must match mhf-iel's MhfConfig serde output exactly.
 #[derive(Debug, Serialize)]
 pub struct GameConfig {
     pub char_id: u32,
@@ -96,13 +122,13 @@ pub struct GameConfig {
     pub entrance_count: u32,
     pub current_ts: u32,
     pub expiry_ts: u32,
-    pub notices: Vec<String>,
+    pub notices: Vec<NoticeOut>,
     pub mez_event_id: u32,
     pub mez_start: u32,
     pub mez_end: u32,
     pub mez_solo_tickets: u32,
     pub mez_group_tickets: u32,
-    pub mez_stalls: Vec<u32>,
+    pub mez_stalls: Vec<String>,
     pub version: String, // "ZZ" | "F5"
     pub mhf_folder: Option<String>,
     pub mhf_flags: Option<Vec<String>>,
@@ -205,13 +231,26 @@ pub fn save_config(
         entrance_count: login.entrance_count,
         current_ts: login.current_ts,
         expiry_ts: login.expiry_ts,
-        notices: login.notices.clone(),
+        notices: login
+            .notices
+            .iter()
+            .map(|data| NoticeOut {
+                flags: 0,
+                data: data.clone(),
+            })
+            .collect(),
         mez_event_id: mez.map_or(0, |m| m.id),
         mez_start: mez.map_or(0, |m| m.start),
         mez_end: mez.map_or(0, |m| m.end),
         mez_solo_tickets: mez.map_or(0, |m| m.solo_tickets),
         mez_group_tickets: mez.map_or(0, |m| m.group_tickets),
-        mez_stalls: mez.map_or_else(Vec::new, |m| m.stalls.clone()),
+        mez_stalls: mez.map_or_else(Vec::new, |m| {
+            m.stalls
+                .iter()
+                .filter_map(|id| mez_fes_stall_name(*id))
+                .map(String::from)
+                .collect()
+        }),
         version: version.to_string(),
         mhf_folder: None,
         mhf_flags: None,
