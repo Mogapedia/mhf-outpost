@@ -37,8 +37,9 @@ game data.
   0x10.
 - **Launch without IE**: writes a valid `config.json` and runs the bundled
   32-bit boot stub, embedded in the executable at compile time — no network
-  dependency on launch, no GameGuard hooks. Quick-play button in the top bar
-  for the last-played version.
+  dependency on launch, no GameGuard hooks. The stub is refreshed on every
+  launch, so upgrading mhf-outpost never leaves a stale one in the game
+  folder. Quick-play button in the top bar for the last-played version.
 - **Translations**: downloads the per-language `translations-<lang>.json.gz`
   payload from MHFrontier-Translation releases and patches `mhfdat.bin` /
   `mhfpac.bin` natively (decrypt → decompress → rewrite pointer tables →

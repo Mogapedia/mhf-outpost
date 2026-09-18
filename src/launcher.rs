@@ -51,7 +51,6 @@ pub fn extract_launcher(dest: &Path) -> Result<()> {
         }
     }
 
-    println!("\nAuthenticate via the launcher UI to generate config.json, then launch.");
     Ok(())
 }
 
@@ -74,14 +73,11 @@ pub fn launch(game_dir: &Path, auth_first: bool) -> Result<()> {
         );
     }
 
-    if !cli_exe.exists() {
-        bail!(
-            "mhf-iel-cli.exe not found in '{}'\n\
-             Run: mhf-outpost extract-launcher --path {}",
-            game_dir.display(),
-            game_dir.display()
-        );
-    }
+    // Always run the stub this build was tested with: an older one left in
+    // the folder by a previous version can panic on today's config.json.
+    // No-op when the file is already byte-identical.
+    extract_launcher(game_dir)?;
+    debug_assert!(cli_exe.exists());
 
     // The boot stub loads the engine DLL from the game directory and panics
     // (exit 101) if it is absent; say so before it gets that far.
