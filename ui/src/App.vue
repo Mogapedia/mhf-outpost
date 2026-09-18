@@ -202,13 +202,14 @@ function resetAuth() {
   authSession.value = ''
   authChars.value = []
   activeChar.value = null
+  authPatchServer.value = ''
 }
 
 async function submitCredentials() {
   authLoading.value = true
   authError.value = ''
   try {
-    const result = await invoke<{ characters: CharDto[]; session_json: string }>('authenticate', {
+    const result = await invoke<{ characters: CharDto[]; session_json: string; patch_server: string }>('authenticate', {
       server: serverUrl.value,
       username: authUsername.value,
       password: authPassword.value,
@@ -216,6 +217,7 @@ async function submitCredentials() {
     })
     authSession.value = result.session_json
     authChars.value = result.characters
+    authPatchServer.value = result.patch_server ?? ''
     if (result.characters.length === 1) {
       selectChar(result.characters[0])
     } else if (result.characters.length === 0) {
@@ -279,6 +281,59 @@ async function downloadTranslations() {
   }
 }
 
+// ── Patch server sync ────────────────────────────────────────────────────────
+
+// Advertised by the Erupe server at login; empty when the server has no patch
+// server. Same per-file CRC32 update mechanism as the original launcher.
+const authPatchServer = ref('')
+const syncing = ref(false)
+const syncProgress = ref<{ phase: string; done: number; total: number } | null>(null)
+const syncError = ref('')
+
+const syncLabel = computed(() => {
+  const p = syncProgress.value
+  if (!p) return 'Checking…'
+  if (p.phase === 'check') return `Checking files ${p.done}/${p.total}`
+  if (p.phase === 'download') {
+    const mib = (n: number) => (n / 1048576).toFixed(0)
+    return `Downloading ${mib(p.done)} / ${mib(p.total)} MiB`
+  }
+  return 'Updating…'
+})
+const syncPct = computed(() => {
+  const p = syncProgress.value
+  return p && p.total > 0 ? Math.round((p.done / p.total) * 100) : 0
+})
+
+async function syncGame() {
+  if (!selectedPath.value) {
+    showToast('Set an install path in the Library tab first', 'err')
+    return
+  }
+  if (!authPatchServer.value) {
+    showToast('This server does not provide game updates', 'err')
+    return
+  }
+  syncing.value = true
+  syncError.value = ''
+  syncProgress.value = null
+  try {
+    const r = await invoke<{ checked: number; up_to_date: number; downloaded: number }>('sync_game', {
+      path: selectedPath.value,
+      patchServer: authPatchServer.value,
+    })
+    showToast(r.downloaded === 0
+      ? `All ${r.checked} files up to date`
+      : `${r.downloaded} file(s) updated`)
+  } catch (e: any) {
+    syncError.value = String(e)
+    showToast('Update failed', 'err')
+  } finally {
+    syncing.value = false
+    syncProgress.value = null
+  }
+}
+
 // Toast / status message
 const toast = ref<{ text: string; type: 'ok' | 'err' } | null>(null)
 function showToast(text: string, type: 'ok' | 'err' = 'ok') {
@@ -333,6 +388,11 @@ const recommendedVersion = computed(() =>
 onMounted(async () => {
   versions.value = await invoke<Version[]>('list_versions')
   if (versions.value.length > 0) selectedId.value = versions.value[0].id
+
+  await listen<{ phase: string; done: number; total: number; message?: string }>('sync-progress', (event) => {
+    const p = event.payload
+    if (p.phase === 'check' || p.phase === 'download') syncProgress.value = p
+  })
 
   await listen<ProgressEvent>('download-progress', (event) => {
     const p = event.payload
@@ -839,6 +899,21 @@ async function clearAllData() {
           <div class="session-actions">
             <button class="btn-secondary" @click="authStep = 'characters'">Switch character</button>
             <button class="btn-outline" @click="resetAuth">Log out</button>
+          </div>
+          <div class="session-sync" v-if="authPatchServer">
+            <button
+              class="btn-secondary"
+              :disabled="syncing || !selectedPath"
+              :title="selectedPath ? `Install or update the game files from ${authPatchServer}` : 'Set an install path in the Library tab first'"
+              @click="syncGame"
+            >{{ syncing ? syncLabel : '&#x21BB;  Update game files' }}</button>
+            <div class="progress-track" v-if="syncing && syncProgress">
+              <div class="progress-fill" :style="{ width: syncPct + '%' }"></div>
+            </div>
+            <p class="field-hint" v-if="!syncing">
+              Downloads only what is missing or changed — works on an empty folder for a first install.
+            </p>
+            <p class="field-hint err-text" v-if="syncError">{{ syncError }}</p>
           </div>
         </div>
 
@@ -1572,6 +1647,8 @@ async function clearAllData() {
 }
 
 /* Session card (logged-in state) */
+.session-sync { display: flex; flex-direction: column; gap: 8px; margin-top: 12px; }
+.err-text { color: var(--err, #e66); }
 .session-card {
   background: var(--bg-card);
   border: 1px solid var(--border);

@@ -15,6 +15,7 @@ Built with [Tauri 2](https://tauri.app) (Rust backend) and Vue 3 (frontend).
 - Download and verify game archives from archive.org (G10, GG, G91, G52, G2, G1, F5, F4, S6, Wii U)
 - SHA-1 archive integrity check before extraction; SHA-256 per-file verification after
 - Resume interrupted downloads
+- Install or update from an Erupe server's patch server (per-file CRC32 sync, same protocol as the original launcher) — no archive needed when the server hosts the files
 - Server tab independent of game version — authenticate once, play any installed version
 - Login, register, and character selection against any Erupe-compatible server
 - Bundles `mhf-iel-cli.exe` directly in the binary — no network fetch, no GitHub dependency
@@ -87,6 +88,7 @@ mhf-outpost list
 mhf-outpost info G10
 mhf-outpost download --version G10 --path ~/mhf
 mhf-outpost verify  --version G10 --path ~/mhf
+mhf-outpost sync    --path ~/mhf --patch-server frontier.mogapedia.fr   # install/update from a patch server
 mhf-outpost fetch-launcher --path ~/mhf
 mhf-outpost launch --path ~/mhf
 mhf-outpost check

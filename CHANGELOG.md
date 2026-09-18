@@ -7,6 +7,21 @@ this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ## [Unreleased]
 
+### Added
+
+- **Patch server sync** (`sync` command, "Update game files" button): install
+  or update a game directory from an MHF patch server — the same per-file
+  CRC32 mechanism the original `mhl.dll` launcher uses (ZeruLight "MHF Patch
+  Server API" layout: `mhf_file.php?key=` manifest + `mhfdat/{exe,dat}` tree).
+  Files are compared by size then CRC32, only differences are downloaded
+  (4 parallel connections, `.part` files verified before being renamed into
+  place, 3 retries). Works on an empty folder, so a server that advertises a
+  patch server no longer needs an archive.org source or a 5 GB zip. The
+  request shapes were recovered from `mhl.dll`, where they are stored
+  obfuscated (each byte offset by 0x10).
+- `authenticate` now returns the server's `patchServer`; the GUI shows the
+  update button in the session card whenever the server advertises one.
+
 ## [0.1.0] — TBD
 
 First public release of mhf-outpost. The launcher can now take a fresh user

@@ -1,4 +1,4 @@
-use mhf_outpost_core::{auth, check, download, launcher, manifest, translate, verify};
+use mhf_outpost_core::{auth, check, download, launcher, manifest, sync, translate, verify};
 use serde::Serialize;
 use std::path::PathBuf;
 use std::sync::Arc;
@@ -271,6 +271,9 @@ pub struct AuthSession {
     pub characters: Vec<CharacterDto>,
     /// Serialised LoginResponse — held by the frontend and passed to select_character.
     pub session_json: String,
+    /// Patch server the Erupe instance advertises (empty when it has none).
+    /// Feed it to `sync_game` to install or update the game files.
+    pub patch_server: String,
 }
 
 /// Authenticate against an Erupe server. Returns the list of characters plus an
@@ -299,11 +302,13 @@ pub async fn authenticate(
             })
             .collect();
 
+        let patch_server = login.patch_server.clone();
         let session_json = serde_json::to_string(&login).map_err(|e| e.to_string())?;
 
         Ok(AuthSession {
             characters,
             session_json,
+            patch_server,
         })
     })
     .await
@@ -433,4 +438,92 @@ pub async fn launch_game_authed(
     })
     .await
     .map_err(|e| e.to_string())?
+}
+
+// ── Patch server sync ────────────────────────────────────────────────────────
+
+#[derive(Serialize, Clone)]
+pub struct SyncProgressEvent {
+    /// "check" (done/total are files), "download" (bytes), "done", "error".
+    pub phase: String,
+    pub done: u64,
+    pub total: u64,
+    pub message: Option<String>,
+}
+
+#[derive(Serialize, Clone)]
+pub struct SyncResultDto {
+    pub checked: usize,
+    pub up_to_date: usize,
+    pub downloaded: usize,
+    pub bytes_downloaded: u64,
+}
+
+/// Install or update the game directory from an MHF patch server — the same
+/// per-file CRC32 mechanism the original launcher uses. `patch_server` is the
+/// value returned by `authenticate`. Progress is streamed as `sync-progress`.
+#[tauri::command]
+pub async fn sync_game(
+    window: tauri::Window,
+    path: String,
+    patch_server: String,
+) -> Result<SyncResultDto, String> {
+    let window_cb = window.clone();
+    let on_progress: sync::ProgressCallback = Arc::new(move |phase, done, total| {
+        let _ = window_cb.emit(
+            "sync-progress",
+            SyncProgressEvent {
+                phase: phase.to_string(),
+                done,
+                total,
+                message: None,
+            },
+        );
+    });
+
+    let result = tauri::async_runtime::spawn_blocking(move || {
+        sync::run(sync::SyncOptions {
+            dest: PathBuf::from(&path),
+            patch_server,
+            dry_run: false,
+            on_progress: Some(on_progress),
+        })
+    })
+    .await
+    .map_err(|e| e.to_string())?;
+
+    match result {
+        Ok(r) => {
+            let _ = window.emit(
+                "sync-progress",
+                SyncProgressEvent {
+                    phase: "done".to_string(),
+                    done: r.bytes_downloaded,
+                    total: r.bytes_downloaded,
+                    message: Some(format!(
+                        "{} file(s) downloaded, {} already up to date",
+                        r.downloaded, r.up_to_date
+                    )),
+                },
+            );
+            Ok(SyncResultDto {
+                checked: r.checked,
+                up_to_date: r.up_to_date,
+                downloaded: r.downloaded,
+                bytes_downloaded: r.bytes_downloaded,
+            })
+        }
+        Err(e) => {
+            let _ = window.emit(
+                "sync-progress",
+                SyncProgressEvent {
+                    phase: "error".to_string(),
+                    done: 0,
+                    total: 0,
+                    message: Some(e.to_string()),
+                },
+            );
+            Err(e.to_string())
+        }
+    }
 }

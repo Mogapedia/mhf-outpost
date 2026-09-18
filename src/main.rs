@@ -7,6 +7,7 @@ mod launcher;
 mod manifest;
 mod patch;
 mod pointer_tables;
+mod sync;
 mod translate;
 mod verify;
 
@@ -210,6 +211,26 @@ enum Command {
         repo: String,
     },
 
+    /// Update a game directory from an MHF patch server (what mhl.dll does).
+    ///
+    /// Fetches the server's CRC32 manifest, compares every listed file by size
+    /// then CRC32, and downloads only what is missing or different. Safe to run
+    /// on an empty folder (first install) or before every launch (updates).
+    Sync {
+        /// Game directory to update (created if missing).
+        #[arg(short, long)]
+        path: PathBuf,
+
+        /// Patch server host or base URL, as advertised by Erupe's login
+        /// response (e.g. frontier.mogapedia.fr or http://patch.example.com).
+        #[arg(long)]
+        patch_server: String,
+
+        /// Only list what would be downloaded.
+        #[arg(long)]
+        dry_run: bool,
+    },
+
     /// Compute the SHA-256 and SHA-1 of a single file.
     Hash { path: PathBuf },
 
@@ -285,6 +306,23 @@ fn main() -> Result<()> {
             lang,
             repo,
         }),
+        Command::Sync {
+            path,
+            patch_server,
+            dry_run,
+        } => {
+            let r = sync::run(sync::SyncOptions {
+                dest: path,
+                patch_server,
+                dry_run,
+                on_progress: None,
+            })?;
+            println!(
+                "Checked {} file(s): {} up to date, {} downloaded",
+                r.checked, r.up_to_date, r.downloaded
+            );
+            Ok(())
+        }
         Command::Hash { path } => cmd_hash(&path),
         Command::HashDir {
             path,
@@ -327,6 +365,9 @@ fn cmd_login(
     };
 
     auth::save_config(path, server, &login, id, &char_data, game_version)?;
+    if !login.patch_server.is_empty() {
+        println!("Patch server: {} (run `sync --patch-server` to install or update)", login.patch_server);
+    }
     println!(
         "Authenticated as '{}' (HR{} GR{}) — config.json written to {}",
         char_data.name,

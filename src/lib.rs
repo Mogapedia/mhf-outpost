@@ -7,5 +7,6 @@ pub mod launcher;
 pub mod manifest;
 pub mod patch;
 pub mod pointer_tables;
+pub mod sync;
 pub mod translate;
 pub mod verify;
