@@ -21,7 +21,7 @@ use verify::{FileStatus, VerifyReport};
 #[derive(Parser)]
 #[command(
     name = "mhf-outpost",
-    about = "MHF game file verifier and installer helper",
+    about = "Launcher for Monster Hunter Frontier private servers",
     version
 )]
 struct Cli {

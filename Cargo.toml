@@ -7,7 +7,7 @@ resolver = "2"
 name = "mhf-outpost"
 version = "0.1.0"
 edition = "2021"
-description = "MHF game file verifier, installer and launcher"
+description = "Launcher for Monster Hunter Frontier private servers (Erupe): sign-in, file sync, translations, Wine support"
 
 [lib]
 name = "mhf_outpost_core"

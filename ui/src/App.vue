@@ -864,7 +864,7 @@ async function clearAllData() {
         <!-- Tip -->
         <div class="info-box" v-if="!isInstalled && selectedPath">
           <strong>Tip:</strong> If you already have the game files at the chosen path,
-          use <em>Get launcher only</em> to download mhf-iel and start playing.
+          use <em>Get launcher only</em> to place the boot stub and start playing.
         </div>
       </div>
 
@@ -1077,14 +1077,14 @@ async function clearAllData() {
             launcher exists to keep it accessible for preservation.
           </p>
           <p class="settings-about">
-            It downloads verified game archives from
-            <a href="https://archive.org" target="_blank" rel="noopener">archive.org</a>,
-            authenticates against any
-            <a href="https://github.com/Mezeporta/Erupe" target="_blank" rel="noopener">Erupe</a>
-            server, and applies community translations from
+            It signs in to any
+            <a href="https://github.com/Houmgaor/Erupe" target="_blank" rel="noopener">Erupe</a>
+            server, keeps the game files in sync with that server, applies
+            community translations from
             <a href="https://github.com/mogapedia/MHFrontier-Translation" target="_blank" rel="noopener">MHFrontier-Translation</a>
             so you can play in French, English, or any other supported
-            language. Built by the
+            language, and boots the game without Internet Explorer. The
+            launcher itself contains no game data. Built by the
             <a href="https://mogapedia.fr" target="_blank" rel="noopener">Mogapedia</a>
             preservation project.
           </p>
