@@ -83,10 +83,36 @@ pub fn launch(game_dir: &Path, auth_first: bool) -> Result<()> {
         );
     }
 
+    // The boot stub loads the engine DLL from the game directory and panics
+    // (exit 101) if it is absent; say so before it gets that far.
+    let has_engine = ["mhfo-hd.dll", "mhfo.dll"]
+        .iter()
+        .any(|f| game_dir.join(f).exists());
+    if !has_engine {
+        bail!(
+            "no game files in '{}' (mhfo-hd.dll / mhfo.dll missing).\n\
+             Install or update the game files from the server first \
+             (\"Install / update game files\", or `mhf-outpost sync`).",
+            game_dir.display()
+        );
+    }
+
     println!("Launching MHF…");
-    let status = platform_exec(&cli_exe, game_dir)?;
-    if !status.success() {
-        bail!("mhf-iel-cli exited with {:?}", status.code());
+    let out = platform_exec(&cli_exe, game_dir)?;
+    if !out.status.success() {
+        let stderr = String::from_utf8_lossy(&out.stderr);
+        let stdout = String::from_utf8_lossy(&out.stdout);
+        // Keep the tail: a Rust panic message is on the last few lines.
+        let tail = |t: &str| -> String {
+            let lines: Vec<&str> = t.lines().filter(|l| !l.trim().is_empty()).collect();
+            lines[lines.len().saturating_sub(8)..].join("\n")
+        };
+        let detail = if !stderr.trim().is_empty() { tail(&stderr) } else { tail(&stdout) };
+        bail!(
+            "mhf-iel-cli exited with {:?}{}",
+            out.status.code(),
+            if detail.is_empty() { String::new() } else { format!(":\n{detail}") }
+        );
     }
     Ok(())
 }
@@ -104,13 +130,15 @@ fn token_expired(config_path: &Path) -> bool {
     token.len() != 16
 }
 
-/// Run a Windows .exe: natively on Windows, via Wine on Linux.
-fn platform_exec(exe: &Path, cwd: &Path) -> Result<std::process::ExitStatus> {
+/// Run a Windows .exe: natively on Windows, via Wine on Linux. Output is
+/// captured so a failure can be explained; the stub prints little, the game
+/// itself nothing.
+fn platform_exec(exe: &Path, cwd: &Path) -> Result<std::process::Output> {
     #[cfg(target_os = "windows")]
     {
         std::process::Command::new(exe)
             .current_dir(cwd)
-            .status()
+            .output()
             .with_context(|| format!("failed to run '{}'", exe.display()))
     }
 
@@ -118,12 +146,12 @@ fn platform_exec(exe: &Path, cwd: &Path) -> Result<std::process::ExitStatus> {
     {
         // Try wine, then wine64.
         for bin in ["wine", "wine64"] {
-            if let Ok(status) = std::process::Command::new(bin)
+            if let Ok(out) = std::process::Command::new(bin)
                 .arg(exe)
                 .current_dir(cwd)
-                .status()
+                .output()
             {
-                return Ok(status);
+                return Ok(out);
             }
         }
         bail!(
