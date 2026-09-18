@@ -138,11 +138,8 @@ pub struct ServerInfoResponse {
     pub name: String,
 }
 
-/// Fetch server info from an Erupe instance and print a compatibility summary.
-///
-/// `local_version` is the mhf-outpost manifest ID the user has installed
-/// (e.g. "zz", "gg"). Pass `None` to skip the compatibility check.
-pub fn server_info(server: &str, local_version: Option<&str>) -> Result<()> {
+/// Fetch `GET /v2/server/info` from an Erupe instance.
+pub fn fetch_server_info(server: &str) -> Result<ServerInfoResponse> {
     let client = reqwest::blocking::Client::builder()
         .user_agent("mhf-outpost/0.1")
         .timeout(REQUEST_TIMEOUT)
@@ -162,9 +159,15 @@ pub fn server_info(server: &str, local_version: Option<&str>) -> Result<()> {
         );
     }
 
-    let info: ServerInfoResponse = resp
-        .json()
-        .context("failed to parse server info response")?;
+    resp.json().context("failed to parse server info response")
+}
+
+/// Fetch server info from an Erupe instance and print a compatibility summary.
+///
+/// `local_version` is the mhf-outpost manifest ID the user has installed
+/// (e.g. "zz", "gg"). Pass `None` to skip the compatibility check.
+pub fn server_info(server: &str, local_version: Option<&str>) -> Result<()> {
+    let info = fetch_server_info(server)?;
 
     println!("Server:      {}", server);
     println!("Software:    {}", info.name);

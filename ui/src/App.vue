@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, computed, onMounted } from 'vue'
+import { ref, computed, onMounted, watch } from 'vue'
 import { invoke } from '@tauri-apps/api/core'
 import { listen } from '@tauri-apps/api/event'
 import { open, ask } from '@tauri-apps/plugin-dialog'
@@ -46,7 +46,7 @@ const GENERATIONS: Array<{ key: 'Z' | 'G' | 'Forward' | 'Season' | 'Other'; labe
 
 /// Version we suggest to first-time users: the latest content patch with the
 /// most active community translations. Drives the "Recommended" badge in the
-/// sidebar and the "Get started" CTA on the welcome screen.
+/// sidebar (the welcome flow takes the version from the server instead).
 const RECOMMENDED_ID = 'ZZ'
 
 interface CheckItem {
@@ -334,6 +334,100 @@ async function syncGame() {
   }
 }
 
+// ── Guided first-run flow (welcome screen) ───────────────────────────────────
+//
+// Server first: the server tells us which client version it runs
+// (/v2/server/info) and whether it provides the game files (patchServer at
+// login), so a newcomer never picks a version or a download source.
+
+type WelcomeStep = 'server' | 'auth' | 'install' | 'ready'
+const welcomeStep = ref<WelcomeStep>('server')
+const welcomeServerInput = ref(
+  serverUrl.value === 'http://127.0.0.1:8080' ? '' : serverUrl.value
+)
+const welcomeServerInfo = ref<{ name: string; client_mode: string; manifest_id: string } | null>(null)
+const welcomeServerLoading = ref(false)
+const welcomeServerError = ref('')
+const welcomeInstallDir = ref('')
+
+/// Normalise what people type: bare host → http://host:8080 (Erupe's default
+/// API port); missing scheme → http://.
+function normaliseServerInput(raw: string): string {
+  let s = raw.trim().replace(/\/+$/, '')
+  if (!s) return ''
+  if (!/^https?:\/\//i.test(s)) s = 'http://' + s
+  try {
+    const u = new URL(s)
+    if (!u.port && u.pathname === '/') u.port = '8080'
+    return u.toString().replace(/\/+$/, '')
+  } catch {
+    return s
+  }
+}
+
+async function welcomeConnect() {
+  const url = normaliseServerInput(welcomeServerInput.value)
+  if (!url) return
+  welcomeServerLoading.value = true
+  welcomeServerError.value = ''
+  try {
+    const info = await invoke<{ name: string; client_mode: string; manifest_id: string }>('get_server_info', { server: url })
+    welcomeServerInfo.value = info
+    serverUrl.value = url
+    saveServerUrl()
+    resetAuth()
+    // The server's manifest ID picks the version; fall back to the recommended
+    // one if this build has no manifest for it (the path is still stored under
+    // the server's ID so Library shows it).
+    const known = versions.value.find(v => v.id.toLowerCase() === info.manifest_id)
+    selectedId.value = known ? known.id : info.manifest_id.toUpperCase()
+    welcomeStep.value = 'auth'
+  } catch (e: any) {
+    welcomeServerError.value = String(e)
+  } finally {
+    welcomeServerLoading.value = false
+  }
+}
+
+/// Sign-in from the welcome screen reuses the Server tab's flow; once a
+/// character is active we move on to installing.
+watch(authStep, (step) => {
+  if (showWelcome.value && step === 'done' && welcomeStep.value === 'auth') {
+    welcomeStep.value = 'install'
+  }
+})
+
+async function welcomePickDir() {
+  const dir = await open({ directory: true, multiple: false, title: 'Choose where to install the game' })
+  if (dir) welcomeInstallDir.value = dir as string
+}
+
+async function welcomeInstall() {
+  if (!welcomeInstallDir.value || !selectedId.value) return
+  installedPaths.value[selectedId.value] = welcomeInstallDir.value
+  savePaths()
+  if (authPatchServer.value) {
+    await syncGame()
+    if (syncError.value) return
+  }
+  welcomeStep.value = 'ready'
+}
+
+/// The user already has the files (server without a patch server, or a
+/// pre-existing install): just record the folder.
+function welcomeUseExisting() {
+  if (!welcomeInstallDir.value || !selectedId.value) return
+  installedPaths.value[selectedId.value] = welcomeInstallDir.value
+  savePaths()
+  welcomeStep.value = 'ready'
+}
+
+async function welcomePlay() {
+  dismissWelcome()
+  view.value = 'library'
+  await launchGame()
+}
+
 // Toast / status message
 const toast = ref<{ text: string; type: 'ok' | 'err' } | null>(null)
 function showToast(text: string, type: 'ok' | 'err' = 'ok') {
@@ -378,9 +472,8 @@ const quickPlayReady = computed(() =>
 // explicitly dismissed it. Either condition flipping (an install appearing,
 // or the user clicking "Browse versions") hides it permanently.
 const hasAnyInstall = computed(() => Object.keys(installedPaths.value).length > 0)
-const showWelcome = computed(() => !welcomeDismissed.value && !hasAnyInstall.value)
-const recommendedVersion = computed(() =>
-  versions.value.find(v => v.id === RECOMMENDED_ID) ?? null
+const showWelcome = computed(() =>
+  !welcomeDismissed.value && (!hasAnyInstall.value || welcomeStep.value !== 'server')
 )
 
 // ── Lifecycle ────────────────────────────────────────────────────────────────
@@ -417,18 +510,6 @@ async function pickInstallPath() {
   }
 }
 
-/// Welcome-screen "Get started" path: dismiss the screen, jump to the
-/// recommended version, and open the install folder picker so the user
-/// lands one click away from the download starting.
-async function startGuidedSetup() {
-  dismissWelcome()
-  view.value = 'library'
-  if (recommendedVersion.value) {
-    selectedId.value = recommendedVersion.value.id
-  }
-  await startDownload()
-}
-
 async function startDownload() {
   if (!selected.value || !selectedId.value) return
   let dest = selectedPath.value
@@ -444,6 +525,18 @@ async function startDownload() {
   } catch (e) {
     // error already emitted via event
   }
+}
+
+/// Library "Install from server": pick a folder if none is set, then sync.
+async function installFromServer() {
+  if (!selectedId.value) return
+  if (!selectedPath.value) {
+    const dir = await open({ directory: true, multiple: false, title: 'Choose installation folder' })
+    if (!dir) return
+    installedPaths.value[selectedId.value] = dir as string
+    savePaths()
+  }
+  await syncGame()
 }
 
 async function launchGame() {
@@ -603,60 +696,165 @@ async function clearAllData() {
         <h1 class="welcome-title">Welcome to MHF Launcher</h1>
         <p class="welcome-tagline">
           Monster Hunter Frontier was Capcom's MMORPG, shut down on
-          2019-12-18. This launcher reconnects the original game client
-          to a community-run <strong>Erupe</strong> server so the game can be
-          played again, in service of preservation.
+          2019-12-18. This launcher connects the game to a community-run
+          <strong>Erupe</strong> server. The server provides the game files;
+          the launcher keeps them up to date and starts the game.
         </p>
 
         <ol class="welcome-steps">
-          <li>
+          <!-- 1. Server -->
+          <li :class="{ 'step-done': welcomeStep !== 'server' }">
             <span class="step-num">1</span>
-            <div>
-              <div class="step-name">Install the game files</div>
-              <div class="step-desc">
-                Download a verified archive from archive.org. We recommend
-                <strong>{{ recommendedVersion?.name ?? 'MHF-ZZ' }}</strong>
-                <span v-if="recommendedVersion?.archive_size_gb">
-                  ({{ recommendedVersion.archive_size_gb.toFixed(1) }} GB)
-                </span>
-                — the latest content patch with the most active community.
+            <div class="step-body">
+              <div class="step-name">Choose a server</div>
+              <template v-if="welcomeStep === 'server'">
+                <div class="step-desc">
+                  Enter the address your community gave you.
+                </div>
+                <div class="field-row welcome-input-row">
+                  <input
+                    class="path-input"
+                    v-model="welcomeServerInput"
+                    placeholder="frontier.example.com"
+                    autofocus
+                    @keyup.enter="welcomeConnect"
+                  />
+                  <button
+                    class="btn-primary"
+                    :disabled="welcomeServerLoading || !welcomeServerInput.trim()"
+                    @click="welcomeConnect"
+                  >{{ welcomeServerLoading ? 'Connecting…' : 'Connect' }}</button>
+                </div>
+                <div class="auth-error" v-if="welcomeServerError">{{ welcomeServerError }}</div>
+              </template>
+              <div class="step-desc" v-else>
+                <strong>{{ serverUrl }}</strong>
+                <span v-if="welcomeServerInfo"> — {{ welcomeServerInfo.name }}, client {{ welcomeServerInfo.client_mode }}</span>
+                <button class="btn-link" @click="welcomeStep = 'server'; resetAuth()">Change</button>
               </div>
             </div>
           </li>
-          <li>
+
+          <!-- 2. Sign in -->
+          <li :class="{ 'step-done': welcomeStep === 'install' || welcomeStep === 'ready', 'step-pending': welcomeStep === 'server' }">
             <span class="step-num">2</span>
-            <div>
-              <div class="step-name">Sign in to a server</div>
-              <div class="step-desc">
-                Register a free account on any Erupe-compatible server, then
-                pick or create a character. No password is ever stored on disk.
+            <div class="step-body">
+              <div class="step-name">Sign in</div>
+              <template v-if="welcomeStep === 'auth'">
+                <div class="step-desc">
+                  Pick any username and password — the account is created on
+                  first login. Don't reuse a password from elsewhere: it is
+                  stored by the server operator, not by Capcom.
+                </div>
+                <div v-if="authStep === 'characters'" class="char-list">
+                  <button v-for="c in authChars" :key="c.id" class="char-card" @click="selectChar(c)">
+                    <span class="char-name">{{ c.name || '(unnamed)' }}</span>
+                    <span class="char-hr">HR {{ c.hr }} / GR {{ c.gr }}</span>
+                  </button>
+                  <button class="btn-outline" @click="createAndSelectChar">New character</button>
+                </div>
+                <template v-else>
+                  <div class="field-row">
+                    <button :class="['tab-btn', authAction === 'login' ? 'active' : '']" @click="authAction = 'login'">Login</button>
+                    <button :class="['tab-btn', authAction === 'register' ? 'active' : '']" @click="authAction = 'register'">Register</button>
+                  </div>
+                  <div class="field">
+                    <label>Username</label>
+                    <input v-model="authUsername" type="text" placeholder="your username" autocomplete="username" @keyup.enter="submitCredentials" />
+                  </div>
+                  <div class="field">
+                    <label>Password</label>
+                    <input v-model="authPassword" type="password" placeholder="••••••••" autocomplete="current-password" @keyup.enter="submitCredentials" />
+                  </div>
+                  <div class="auth-error" v-if="authError">{{ authError }}</div>
+                  <button
+                    class="btn-primary"
+                    style="align-self: flex-start"
+                    :disabled="authLoading || !authUsername || !authPassword"
+                    @click="submitCredentials"
+                  >{{ authLoading ? 'Connecting…' : authAction === 'login' ? 'Login' : 'Register' }}</button>
+                </template>
+              </template>
+              <div class="step-desc" v-else-if="isAuthenticated">
+                <strong>{{ authUsername }}</strong> — {{ activeChar!.name || 'new character' }}
               </div>
+              <div class="step-desc" v-else>Register or log in on the server.</div>
             </div>
           </li>
-          <li>
+
+          <!-- 3. Game files -->
+          <li :class="{ 'step-done': welcomeStep === 'ready', 'step-pending': welcomeStep === 'server' || welcomeStep === 'auth' }">
             <span class="step-num">3</span>
-            <div>
+            <div class="step-body">
+              <div class="step-name">Game files</div>
+              <template v-if="welcomeStep === 'install'">
+                <div class="step-desc" v-if="authPatchServer">
+                  Choose a folder (an empty one is fine — not inside Program
+                  Files). The launcher downloads the game from the server,
+                  about 5 GB the first time, and only changes afterwards.
+                </div>
+                <div class="step-desc" v-else>
+                  This server does not provide the game files. Choose a folder
+                  that already contains the game (<code>mhf.exe</code>,
+                  <code>dat/</code>), or dismiss this screen to use the
+                  Advanced options.
+                </div>
+                <div class="field-row welcome-input-row">
+                  <input class="path-input" v-model="welcomeInstallDir" placeholder="C:\\Jeux\\MHF" readonly @click="welcomePickDir" />
+                  <button class="btn-outline" @click="welcomePickDir">Browse…</button>
+                </div>
+                <div class="welcome-actions" v-if="authPatchServer">
+                  <button class="btn-primary" :disabled="!welcomeInstallDir || syncing" @click="welcomeInstall">
+                    {{ syncing ? syncLabel : '&#x2B07; Install / update game files' }}
+                  </button>
+                  <button class="btn-link" :disabled="!welcomeInstallDir || syncing" @click="welcomeUseExisting">I already have the files</button>
+                </div>
+                <div class="welcome-actions" v-else>
+                  <button class="btn-primary" :disabled="!welcomeInstallDir" @click="welcomeUseExisting">Use this folder</button>
+                  <button class="btn-link" @click="dismissWelcome">Advanced…</button>
+                </div>
+                <div class="progress-track" v-if="syncing && syncProgress">
+                  <div class="progress-fill" :style="{ width: syncPct + '%' }"></div>
+                </div>
+                <div class="auth-error" v-if="syncError">{{ syncError }}</div>
+              </template>
+              <div class="step-desc" v-else-if="welcomeStep === 'ready'"><strong>{{ welcomeInstallDir }}</strong></div>
+              <div class="step-desc" v-else>Downloaded from the server into a folder you choose.</div>
+            </div>
+          </li>
+
+          <!-- 4. Play -->
+          <li :class="{ 'step-pending': welcomeStep !== 'ready' }">
+            <span class="step-num">4</span>
+            <div class="step-body">
               <div class="step-name">Play</div>
-              <div class="step-desc">
-                Click Play. After your first launch, a quick-play button stays
-                pinned to the top bar so you can jump back in instantly.
+              <template v-if="welcomeStep === 'ready'">
+                <div class="step-desc">
+                  On Windows, add the game folder to Windows Defender's
+                  exclusions first — <code>mhf.exe</code> is routinely flagged
+                  as malware and deleted.
+                </div>
+                <div class="welcome-actions">
+                  <button class="btn-primary welcome-cta" @click="welcomePlay">&#x25B6; Play</button>
+                  <button class="btn-outline" @click="runAvExclude">AV Exclude (Windows)</button>
+                </div>
+              </template>
+              <div class="step-desc" v-else>
+                After your first launch, a quick-play button stays pinned to
+                the top bar.
               </div>
             </div>
           </li>
         </ol>
 
-        <div class="welcome-actions">
-          <button class="btn-primary welcome-cta" @click="startGuidedSetup">
-            &#x2B07; Install {{ recommendedVersion?.name ?? 'MHF-ZZ' }}
-          </button>
-          <button class="btn-outline" @click="dismissWelcome">
-            Browse all versions
-          </button>
+        <div class="welcome-footer">
+          <button class="btn-link" @click="dismissWelcome">Skip — I'll set things up myself</button>
         </div>
 
         <p class="welcome-note">
-          MHF is © Capcom Co., Ltd. and is no longer commercially available.
-          You are responsible for compliance with the laws of your country.
+          MHF is © Capcom Co., Ltd. The launcher contains no game data; files
+          come from the server you connect to. You are responsible for
+          compliance with the laws of your country.
         </p>
       </div>
     </section>
@@ -761,23 +959,22 @@ async function clearAllData() {
         </div>
 
         <!-- Archive-less placeholder banner -->
-        <div class="section missing-archive" v-if="!selected.has_archive">
+        <div class="section missing-archive" v-if="!selected.has_archive && !authPatchServer && !isInstalled">
           <div class="check-row warning">
             <div class="check-icon">&#9888;</div>
             <div class="check-body">
-              <div class="check-name">No archive source yet</div>
+              <div class="check-name">No download source</div>
               <div class="check-detail">
-                This version is documented but we don't have a downloadable
-                archive. If you own a copy of the files, please
-                <a href="https://github.com/Mogapedia/mhf-outpost/issues" target="_blank" rel="noopener">open an issue</a>
-                so we can add it to archive.org and wire up the manifest.
+                Sign in to a server that provides the game files (Server tab),
+                or point the install path at a folder that already contains
+                this version. No public preservation archive is recorded for it.
               </div>
             </div>
           </div>
         </div>
 
-        <!-- Install path (only when an archive exists) -->
-        <div class="section" v-if="selected.has_archive">
+        <!-- Install path -->
+        <div class="section" v-if="selected.has_archive || authPatchServer || isInstalled">
           <label class="section-label">Install path</label>
           <div class="path-row">
             <input class="path-input" :value="selectedPath" readonly placeholder="Not set — click to choose…" @click="pickInstallPath" />
@@ -798,6 +995,12 @@ async function clearAllData() {
           </div>
         </div>
 
+        <!-- Server sync progress -->
+        <div class="progress-block" v-if="syncing && syncProgress">
+          <div class="progress-label">{{ syncLabel }}</div>
+          <div class="progress-track"><div class="progress-fill" :style="{ width: syncPct + '%' }"></div></div>
+        </div>
+
         <!-- Auth status banner (when installed) -->
         <div class="auth-banner" v-if="isInstalled">
           <template v-if="isAuthenticated">
@@ -811,7 +1014,7 @@ async function clearAllData() {
         </div>
 
         <!-- Action buttons (hidden for archive-less versions that aren't installed) -->
-        <div class="actions" v-if="isInstalled || selected.has_archive">
+        <div class="actions" v-if="isInstalled || selected.has_archive || authPatchServer">
           <template v-if="isInstalled">
             <button
               class="btn-primary"
@@ -826,13 +1029,28 @@ async function clearAllData() {
             <button class="btn-outline" @click="fetchLauncher">Update launcher</button>
             <button class="btn-outline" @click="runAvExclude">AV Exclude (Windows)</button>
           </template>
+          <template v-else-if="authPatchServer">
+            <button
+              class="btn-primary"
+              :disabled="syncing"
+              :title="`Download from ${authPatchServer}`"
+              @click="installFromServer"
+            >{{ syncing ? syncLabel : '&#x2B07;  Install from server' }}</button>
+            <button
+              class="btn-outline"
+              v-if="selected.has_archive"
+              :disabled="isDownloading || syncing"
+              title="Advanced: fetch this version from a public preservation archive instead"
+              @click="startDownload"
+            >{{ isDownloading ? 'Downloading…' : 'From archive (advanced)' }}</button>
+          </template>
           <template v-else>
             <button
               class="btn-primary"
               :disabled="!selected.has_archive || isDownloading"
               @click="startDownload"
             >
-              {{ isDownloading ? 'Downloading…' : selected.has_archive ? '&#x2B07;  Install' : 'No source available' }}
+              {{ isDownloading ? 'Downloading…' : selected.has_archive ? '&#x2B07;  Install from archive' : 'No source available' }}
             </button>
             <button class="btn-outline" v-if="selectedPath" @click="fetchLauncher">Get launcher only</button>
           </template>
@@ -1932,6 +2150,13 @@ async function clearAllData() {
 }
 .welcome-cta { font-size: 14px; padding: 10px 18px; }
 
+.welcome-steps li.step-pending { opacity: .45; }
+.welcome-steps li.step-done .step-num { background: var(--ok, #3a7); color: #fff; }
+.step-body { display: flex; flex-direction: column; gap: 8px; flex: 1; min-width: 0; }
+.welcome-input-row { align-items: stretch; }
+.welcome-input-row .path-input { flex: 1; }
+.welcome-footer { margin-top: 14px; }
+.char-list { display: flex; flex-wrap: wrap; gap: 8px; }
 .welcome-note {
   font-size: 11px;
   color: var(--text-dim);

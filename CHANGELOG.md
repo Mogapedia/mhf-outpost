@@ -21,6 +21,22 @@ this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
   obfuscated (each byte offset by 0x10).
 - `authenticate` now returns the server's `patchServer`; the GUI shows the
   update button in the session card whenever the server advertises one.
+- **Server-first welcome flow.** First run now asks for a server address,
+  reads `/v2/server/info` to learn which client version it runs, signs the
+  user in, installs the game from the server's patch tree into a chosen
+  folder, and offers Play — four steps, no version picker, no download
+  source to choose. Servers without a patch server get a "use an existing
+  folder" path instead. `get_server_info` Tauri command added.
+
+### Changed
+
+- Library: when signed in to a server that provides files, "Install from
+  server" is the primary action; the preservation-archive download is
+  demoted to "From archive (advanced)". The "No archive source yet" banner
+  only appears when neither route is available.
+- README, crate and CLI descriptions reworded: mhf-outpost is a launcher for
+  Erupe servers and contains no game data; the archive path is for
+  archivists and operators.
 
 ## [0.1.0] — TBD
 

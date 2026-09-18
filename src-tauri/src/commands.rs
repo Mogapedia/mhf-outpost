@@ -527,3 +527,29 @@ pub async fn sync_game(
         }
     }
 }
+
+// ── Server info ──────────────────────────────────────────────────────────────
+
+#[derive(Serialize, Clone)]
+pub struct ServerInfoDto {
+    pub name: String,
+    pub client_mode: String,
+    /// Lower-case manifest ID matching `manifests/` (e.g. "zz").
+    pub manifest_id: String,
+}
+
+/// `GET /v2/server/info` — tells the GUI which client version a server runs so
+/// the guided flow can pick it without asking the user.
+#[tauri::command]
+pub async fn get_server_info(server: String) -> Result<ServerInfoDto, String> {
+    tauri::async_runtime::spawn_blocking(move || {
+        let info = translate::fetch_server_info(&server).map_err(|e| e.to_string())?;
+        Ok(ServerInfoDto {
+            name: info.name,
+            client_mode: info.client_mode,
+            manifest_id: info.manifest_id,
+        })
+    })
+    .await
+    .map_err(|e| e.to_string())?
+}
