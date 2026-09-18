@@ -153,9 +153,9 @@ pub fn fetch_server_info(server: &str) -> Result<ServerInfoResponse> {
 
     if !resp.status().is_success() {
         bail!(
-            "server returned {}: {}",
-            resp.status(),
-            resp.text().unwrap_or_default()
+            "{url} answered {} — not an Erupe API. The address should be the \
+             API origin, usually http://<host>:8080",
+            resp.status()
         );
     }
 

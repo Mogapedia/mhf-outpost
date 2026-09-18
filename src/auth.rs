@@ -161,10 +161,17 @@ pub fn authenticate(
         .with_context(|| format!("failed to connect to {url}"))?;
 
     if !resp.status().is_success() {
+        let status = resp.status();
+        let body = resp.text().unwrap_or_default();
+        // Erupe answers JSON ({"error": ..., "message": ...}); anything else
+        // means the address is not the API (a web server's 404 page, say).
+        if let Ok(v) = serde_json::from_str::<serde_json::Value>(&body) {
+            let msg = v["message"].as_str().or(v["error"].as_str()).unwrap_or("");
+            bail!("{status}: {msg}");
+        }
         bail!(
-            "server returned {}: {}",
-            resp.status(),
-            resp.text().unwrap_or_default()
+            "{url} answered {status} — not an Erupe API. The address should be \
+             the API origin, usually http://<host>:8080"
         );
     }
 

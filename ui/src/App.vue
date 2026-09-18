@@ -151,9 +151,20 @@ function saveLastPlayed(id: string) {
 // installed any version yet — once either is true, the launcher goes straight
 // to the Library on subsequent opens.
 const welcomeDismissed = ref(localStorage.getItem('welcomeDismissed') === '1')
+// The wizard is open on first run (nothing installed, never dismissed) and
+// whenever the user asks for it again from Settings.
+const welcomeOpen = ref(
+  !welcomeDismissed.value && Object.keys(JSON.parse(localStorage.getItem('installedPaths') || '{}')).length === 0
+)
 function dismissWelcome() {
   welcomeDismissed.value = true
+  welcomeOpen.value = false
   localStorage.setItem('welcomeDismissed', '1')
+}
+function openWelcome() {
+  welcomeStep.value = 'server'
+  welcomeServerError.value = ''
+  welcomeOpen.value = true
 }
 
 // System checks
@@ -181,6 +192,13 @@ const verifyResults = ref<Record<string, VerifyResult>>({})
 
 const serverUrl = ref(localStorage.getItem('serverUrl') ?? 'http://127.0.0.1:8080')
 function saveServerUrl() { localStorage.setItem('serverUrl', serverUrl.value) }
+/// Server tab field: normalise what was typed (bare host -> http://host:8080).
+function commitServerUrl() {
+  const n = normaliseServerInput(serverUrl.value)
+  if (n) serverUrl.value = n
+  saveServerUrl()
+  resetAuth()
+}
 
 // Auth session kept in memory only (tokens expire; not persisted to localStorage)
 const authStep = ref<'credentials' | 'characters' | 'done'>('credentials')
@@ -349,6 +367,10 @@ const welcomeServerInfo = ref<{ name: string; client_mode: string; manifest_id: 
 const welcomeServerLoading = ref(false)
 const welcomeServerError = ref('')
 const welcomeInstallDir = ref('')
+// Platform-aware copy: Windows gets the Defender warning and a Windows-style
+// example path; everything else (Linux/Wine, Steam Deck) a home-relative one.
+const isWindows = /Windows/i.test(navigator.userAgent)
+const installDirExample = isWindows ? 'C:\\Jeux\\MHF' : '~/Games/mhf'
 
 /// Normalise what people type: bare host → http://host:8080 (Erupe's default
 /// API port); missing scheme → http://.
@@ -358,7 +380,11 @@ function normaliseServerInput(raw: string): string {
   if (!/^https?:\/\//i.test(s)) s = 'http://' + s
   try {
     const u = new URL(s)
-    if (!u.port && u.pathname === '/') u.port = '8080'
+    // Only the API origin matters; drop any path someone pasted along.
+    u.pathname = '/'
+    u.search = ''
+    u.hash = ''
+    if (!u.port && u.protocol === 'http:') u.port = '8080'
     return u.toString().replace(/\/+$/, '')
   } catch {
     return s
@@ -471,10 +497,7 @@ const quickPlayReady = computed(() =>
 // Welcome is shown when nothing has been installed yet AND the user hasn't
 // explicitly dismissed it. Either condition flipping (an install appearing,
 // or the user clicking "Browse versions") hides it permanently.
-const hasAnyInstall = computed(() => Object.keys(installedPaths.value).length > 0)
-const showWelcome = computed(() =>
-  !welcomeDismissed.value && (!hasAnyInstall.value || welcomeStep.value !== 'server')
-)
+const showWelcome = computed(() => welcomeOpen.value)
 
 // ── Lifecycle ────────────────────────────────────────────────────────────────
 
@@ -789,9 +812,9 @@ async function clearAllData() {
               <div class="step-name">Game files</div>
               <template v-if="welcomeStep === 'install'">
                 <div class="step-desc" v-if="authPatchServer">
-                  Choose a folder (an empty one is fine — not inside Program
-                  Files). The launcher downloads the game from the server,
-                  about 5 GB the first time, and only changes afterwards.
+                  Choose a folder (an empty one is fine<span v-if="isWindows"> — not inside
+                  Program Files</span>). The launcher downloads the game from the
+                  server, about 5 GB the first time, and only changes afterwards.
                 </div>
                 <div class="step-desc" v-else>
                   This server does not provide the game files. Choose a folder
@@ -800,7 +823,7 @@ async function clearAllData() {
                   Advanced options.
                 </div>
                 <div class="field-row welcome-input-row">
-                  <input class="path-input" v-model="welcomeInstallDir" placeholder="C:\\Jeux\\MHF" readonly @click="welcomePickDir" />
+                  <input class="path-input" v-model="welcomeInstallDir" :placeholder="installDirExample" readonly @click="welcomePickDir" />
                   <button class="btn-outline" @click="welcomePickDir">Browse…</button>
                 </div>
                 <div class="welcome-actions" v-if="authPatchServer">
@@ -829,14 +852,18 @@ async function clearAllData() {
             <div class="step-body">
               <div class="step-name">Play</div>
               <template v-if="welcomeStep === 'ready'">
-                <div class="step-desc">
-                  On Windows, add the game folder to Windows Defender's
-                  exclusions first — <code>mhf.exe</code> is routinely flagged
-                  as malware and deleted.
+                <div class="step-desc" v-if="isWindows">
+                  Add the game folder to Windows Defender's exclusions first —
+                  <code>mhf.exe</code> is routinely flagged as malware and deleted.
+                </div>
+                <div class="step-desc" v-else>
+                  The game runs through Wine; the Checks tab tells you if
+                  DirectX 9 / DXVK or Japanese fonts are missing.
                 </div>
                 <div class="welcome-actions">
                   <button class="btn-primary welcome-cta" @click="welcomePlay">&#x25B6; Play</button>
-                  <button class="btn-outline" @click="runAvExclude">AV Exclude (Windows)</button>
+                  <button class="btn-outline" v-if="isWindows" @click="runAvExclude">Add Defender exclusion</button>
+                  <button class="btn-outline" v-else @click="dismissWelcome(); view = 'checks'; runChecks()">Run checks</button>
                 </div>
               </template>
               <div class="step-desc" v-else>
@@ -1096,8 +1123,8 @@ async function clearAllData() {
           <input
             class="path-input"
             v-model="serverUrl"
-            placeholder="http://127.0.0.1:8080"
-            @change="saveServerUrl(); resetAuth()"
+            placeholder="frontier.example.com  (→ http://frontier.example.com:8080)"
+            @change="commitServerUrl"
           />
           <p class="field-hint">Changing the URL will require you to re-authenticate.</p>
         </div>
@@ -1306,6 +1333,12 @@ async function clearAllData() {
             <a href="https://mogapedia.fr" target="_blank" rel="noopener">Mogapedia</a>
             preservation project.
           </p>
+        </div>
+
+        <div class="section">
+          <label class="section-label">Guided setup</label>
+          <p class="field-hint">Walk through server, sign-in, game files and first launch again.</p>
+          <button class="btn-outline" style="align-self: flex-start" @click="openWelcome">Open guided setup</button>
         </div>
 
         <div class="section">
