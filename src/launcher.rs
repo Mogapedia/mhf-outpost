@@ -103,11 +103,19 @@ pub fn launch(game_dir: &Path, auth_first: bool) -> Result<()> {
             let lines: Vec<&str> = t.lines().filter(|l| !l.trim().is_empty()).collect();
             lines[lines.len().saturating_sub(8)..].join("\n")
         };
-        let detail = if !stderr.trim().is_empty() { tail(&stderr) } else { tail(&stdout) };
+        let detail = if !stderr.trim().is_empty() {
+            tail(&stderr)
+        } else {
+            tail(&stdout)
+        };
         bail!(
             "mhf-iel-cli exited with {:?}{}",
             out.status.code(),
-            if detail.is_empty() { String::new() } else { format!(":\n{detail}") }
+            if detail.is_empty() {
+                String::new()
+            } else {
+                format!(":\n{detail}")
+            }
         );
     }
     Ok(())

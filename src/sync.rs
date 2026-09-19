@@ -67,7 +67,11 @@ pub fn parse_manifest(text: &str) -> Result<Vec<PatchEntry>> {
         }
         let f: Vec<&str> = line.split(',').collect();
         if f.len() != 6 {
-            bail!("manifest line {}: expected 6 fields, got {}", n + 1, f.len());
+            bail!(
+                "manifest line {}: expected 6 fields, got {}",
+                n + 1,
+                f.len()
+            );
         }
         let crc32 = u32::from_str_radix(f[0], 16)
             .with_context(|| format!("manifest line {}: bad CRC '{}'", n + 1, f[0]))?;
@@ -170,15 +174,21 @@ impl SyncPlan {
 /// Size is checked first (cheap); the CRC32 is only computed when sizes
 /// match, which is what makes a no-op sync fast enough to run at every
 /// launch. Files are hashed in parallel.
-pub fn plan(root: &Path, entries: &[PatchEntry], on_progress: Option<&ProgressCallback>) -> SyncPlan {
+pub fn plan(
+    root: &Path,
+    entries: &[PatchEntry],
+    on_progress: Option<&ProgressCallback>,
+) -> SyncPlan {
     let total = entries.len() as u64;
     let done = AtomicU64::new(0);
     let pb = if on_progress.is_none() {
         let bar = ProgressBar::new(total);
         bar.set_style(
-            ProgressStyle::with_template("{spinner:.cyan} [{bar:40.cyan/blue}] {pos}/{len} files checked")
-                .unwrap()
-                .progress_chars("=>-"),
+            ProgressStyle::with_template(
+                "{spinner:.cyan} [{bar:40.cyan/blue}] {pos}/{len} files checked",
+            )
+            .unwrap()
+            .progress_chars("=>-"),
         );
         Some(bar)
     } else {
@@ -215,14 +225,25 @@ fn check_one(root: &Path, e: &PatchEntry) -> Option<Planned> {
     let path = root.join(&e.local_path);
     let meta = match fs::metadata(&path) {
         Ok(m) => m,
-        Err(_) => return Some(Planned { entry: e.clone(), reason: Reason::Missing }),
+        Err(_) => {
+            return Some(Planned {
+                entry: e.clone(),
+                reason: Reason::Missing,
+            })
+        }
     };
     if meta.len() != e.size {
-        return Some(Planned { entry: e.clone(), reason: Reason::SizeMismatch });
+        return Some(Planned {
+            entry: e.clone(),
+            reason: Reason::SizeMismatch,
+        });
     }
     match crc32_file(&path) {
         Ok(c) if c == e.crc32 => None,
-        _ => Some(Planned { entry: e.clone(), reason: Reason::CrcMismatch }),
+        _ => Some(Planned {
+            entry: e.clone(),
+            reason: Reason::CrcMismatch,
+        }),
     }
 }
 
@@ -429,8 +450,16 @@ fn download_entry(
     Err(last_err.unwrap())
 }
 
-fn fetch_to(client: &reqwest::blocking::Client, url: &str, part: &Path, e: &PatchEntry) -> Result<()> {
-    let mut resp = client.get(url).send().with_context(|| format!("GET {url}"))?;
+fn fetch_to(
+    client: &reqwest::blocking::Client,
+    url: &str,
+    part: &Path,
+    e: &PatchEntry,
+) -> Result<()> {
+    let mut resp = client
+        .get(url)
+        .send()
+        .with_context(|| format!("GET {url}"))?;
     if !resp.status().is_success() {
         bail!("server returned {} for {url}", resp.status());
     }
@@ -502,7 +531,10 @@ mod tests {
             file_url("http://h", "dat\\a\\b.bin"),
             "http://h/mhfdat/dat/a/b.bin?id=0"
         );
-        assert_eq!(base_url("frontier.mogapedia.fr").unwrap(), "http://frontier.mogapedia.fr");
+        assert_eq!(
+            base_url("frontier.mogapedia.fr").unwrap(),
+            "http://frontier.mogapedia.fr"
+        );
         assert_eq!(base_url("https://x/").unwrap(), "https://x");
         assert!(base_url("  ").is_err());
     }

@@ -7,7 +7,7 @@ this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ## [Unreleased]
 
-## [0.1.0] — TBD
+## [0.1.0] — 2026-09-19
 
 First public release. mhf-outpost is a launcher for Erupe servers: it signs
 in, keeps the game files in sync with the server, applies community
@@ -69,3 +69,6 @@ game data.
   archive (`f1`–`f3`, `g3`, `g6`–`g9`, `s1`–`s5`, `s7`–`s10`, `gg`).
 - Authentication state is held in memory only; signing in again is required
   after restarting the launcher.
+
+[Unreleased]: https://github.com/Mogapedia/mhf-outpost/compare/v0.1.0...HEAD
+[0.1.0]: https://github.com/Mogapedia/mhf-outpost/releases/tag/v0.1.0

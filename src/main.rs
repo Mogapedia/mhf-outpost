@@ -366,7 +366,10 @@ fn cmd_login(
 
     auth::save_config(path, server, &login, id, &char_data, game_version)?;
     if !login.patch_server.is_empty() {
-        println!("Patch server: {} (run `sync --patch-server` to install or update)", login.patch_server);
+        println!(
+            "Patch server: {} (run `sync --patch-server` to install or update)",
+            login.patch_server
+        );
     }
     println!(
         "Authenticated as '{}' (HR{} GR{}) — config.json written to {}",
