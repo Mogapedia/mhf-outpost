@@ -346,25 +346,25 @@ fn cmd_login(
     let action = if register { "register" } else { "login" };
     let login = auth::authenticate(server, action, username, password)?;
 
-    let (id, char_data) = match char_id {
+    let (id, char_data, is_new) = match char_id {
         Some(id) => {
             let c = login
                 .characters
                 .iter()
                 .find(|c| c.id == id)
                 .ok_or_else(|| anyhow::anyhow!("character {id} not found on this account"))?;
-            (c.id, c.clone())
+            (c.id, c.clone(), false)
         }
         None => match login.characters.first() {
-            Some(c) => (c.id, c.clone()),
+            Some(c) => (c.id, c.clone(), false),
             None => {
                 let c = auth::create_character(server, &login.user.token)?;
-                (c.id, c)
+                (c.id, c, true)
             }
         },
     };
 
-    auth::save_config(path, server, &login, id, &char_data, game_version)?;
+    auth::save_config(path, server, &login, id, &char_data, is_new, game_version)?;
     if !login.patch_server.is_empty() {
         println!(
             "Patch server: {} (run `sync --patch-server` to install or update)",

@@ -316,17 +316,17 @@ pub async fn authenticate(
 }
 
 /// Resolve a character from the login session: look up by id, or create a new
-/// one when `char_id == 0`.  Returns `(resolved_id, character)`.
+/// one when `char_id == 0`.  Returns `(resolved_id, character, is_new)`.
 fn resolve_character(
     login: &auth::LoginResponse,
     char_id: u32,
     server: &str,
-) -> Result<(u32, auth::Character), String> {
+) -> Result<(u32, auth::Character, bool), String> {
     if char_id == 0 {
         let new_char =
             auth::create_character(server, &login.user.token).map_err(|e| e.to_string())?;
         let id = new_char.id;
-        Ok((id, new_char))
+        Ok((id, new_char, true))
     } else {
         let c = login
             .characters
@@ -334,7 +334,7 @@ fn resolve_character(
             .find(|c| c.id == char_id)
             .ok_or_else(|| format!("character {char_id} not found"))?
             .clone();
-        Ok((c.id, c))
+        Ok((c.id, c, false))
     }
 }
 
@@ -352,13 +352,14 @@ pub async fn select_character(
     tauri::async_runtime::spawn_blocking(move || {
         let login: auth::LoginResponse =
             serde_json::from_str(&session_json).map_err(|e| format!("invalid session: {e}"))?;
-        let (id, char_data) = resolve_character(&login, char_id, &server)?;
+        let (id, char_data, is_new) = resolve_character(&login, char_id, &server)?;
         auth::save_config(
             std::path::Path::new(&game_path),
             &server,
             &login,
             id,
             &char_data,
+            is_new,
             &version,
         )
         .map_err(|e| e.to_string())
@@ -424,13 +425,14 @@ pub async fn launch_game_authed(
     tauri::async_runtime::spawn_blocking(move || {
         let login: auth::LoginResponse =
             serde_json::from_str(&session_json).map_err(|e| format!("invalid session: {e}"))?;
-        let (id, char_data) = resolve_character(&login, char_id, &server)?;
+        let (id, char_data, is_new) = resolve_character(&login, char_id, &server)?;
         auth::save_config(
             std::path::Path::new(&path),
             &server,
             &login,
             id,
             &char_data,
+            is_new,
             &version,
         )
         .map_err(|e| e.to_string())?;
