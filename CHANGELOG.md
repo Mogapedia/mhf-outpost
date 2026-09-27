@@ -7,6 +7,20 @@ this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ## [Unreleased]
 
+## [0.1.1] — 2026-09-27
+
+### Fixed
+
+- **New characters were disconnected on first login** ([#1]). The launcher
+  always told the game that the character already existed, so the game
+  skipped character creation and asked for a save the server did not have
+  yet, and the server closed the connection. A newly created character now
+  opens character creation. Players whose first login failed just need to
+  sign in again with this version: their unfinished character is picked up
+  and creation starts normally.
+
+[#1]: https://github.com/Mogapedia/mhf-outpost/issues/1
+
 ## [0.1.0] — 2026-09-19
 
 First public release. mhf-outpost is a launcher for Erupe servers: it signs
@@ -70,5 +84,6 @@ game data.
 - Authentication state is held in memory only; signing in again is required
   after restarting the launcher.
 
-[Unreleased]: https://github.com/Mogapedia/mhf-outpost/compare/v0.1.0...HEAD
+[Unreleased]: https://github.com/Mogapedia/mhf-outpost/compare/v0.1.1...HEAD
+[0.1.1]: https://github.com/Mogapedia/mhf-outpost/compare/v0.1.0...v0.1.1
 [0.1.0]: https://github.com/Mogapedia/mhf-outpost/releases/tag/v0.1.0
