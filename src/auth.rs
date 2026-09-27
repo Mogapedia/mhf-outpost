@@ -207,12 +207,18 @@ pub fn create_character(server: &str, token: &str) -> Result<Character> {
 }
 
 /// Build and write `config.json` into `game_dir`.
+///
+/// `is_new` must be true when `char_data` came from `create_character()`: it
+/// becomes `char_new`, which makes the game run its own character creation.
+/// Otherwise the game asks for savedata the server has never stored, and
+/// Erupe drops the connection.
 pub fn save_config(
     game_dir: &Path,
     server: &str,
     login: &LoginResponse,
     char_id: u32,
     char_data: &Character,
+    is_new: bool,
     version: &str,
 ) -> Result<()> {
     let url = reqwest::Url::parse(server).context("invalid server URL")?;
@@ -227,7 +233,7 @@ pub fn save_config(
         char_gr: char_data.gr,
         char_hr: char_data.hr,
         char_ids,
-        char_new: false,
+        char_new: is_new,
         user_token_id: login.user.token_id,
         user_token: login.user.token.clone(),
         user_name: String::new(),
@@ -268,4 +274,72 @@ pub fn save_config(
     std::fs::write(game_dir.join("config.json"), json).context("failed to write config.json")?;
 
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn login() -> LoginResponse {
+        LoginResponse {
+            current_ts: 0,
+            expiry_ts: 0,
+            entrance_count: 1,
+            notices: Vec::new(),
+            user: User {
+                token_id: 1,
+                token: "tok".into(),
+                rights: 0,
+            },
+            characters: Vec::new(),
+            courses: Vec::new(),
+            mez_fes: None,
+            patch_server: String::new(),
+        }
+    }
+
+    fn character() -> Character {
+        Character {
+            id: 400,
+            name: String::new(),
+            is_female: false,
+            weapon: 0,
+            hr: 0,
+            gr: 0,
+            last_login: 0,
+            returning: false,
+        }
+    }
+
+    fn written_char_new(is_new: bool) -> bool {
+        let dir = std::env::temp_dir().join(format!(
+            "mhf-outpost-char-new-{}-{is_new}",
+            std::process::id()
+        ));
+        save_config(
+            &dir,
+            "http://localhost:8080",
+            &login(),
+            400,
+            &character(),
+            is_new,
+            "ZZ",
+        )
+        .unwrap();
+        let json: serde_json::Value =
+            serde_json::from_str(&std::fs::read_to_string(dir.join("config.json")).unwrap())
+                .unwrap();
+        std::fs::remove_dir_all(&dir).unwrap();
+        json["char_new"].as_bool().unwrap()
+    }
+
+    #[test]
+    fn save_config_marks_created_character_as_new() {
+        assert!(written_char_new(true));
+    }
+
+    #[test]
+    fn save_config_keeps_existing_character_not_new() {
+        assert!(!written_char_new(false));
+    }
 }
