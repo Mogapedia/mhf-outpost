@@ -155,8 +155,7 @@ pub fn game_dir_checks(path: &Path) -> Vec<Check> {
             checks.push(Check::warn(
                 "d3d9.dll (game folder)",
                 "not found in game folder",
-                "Copy the DXVK d3d9.dll into the game folder for Wine compatibility \
-                 (see Wine/DXVK setup guide)",
+                DXVK_HINT,
             ));
         }
     }
@@ -293,7 +292,7 @@ fn check_wine() -> Check {
              \n  Fedora:  sudo dnf install wine\
              \n  Ubuntu:  sudo apt install wine\
              \n  Arch:    sudo pacman -S wine\
-             \nThen install DXVK 2.x into your Wine prefix for DX9 support",
+             \nThen install DXVK 2.7.1 (winetricks dxvk2071) for DX9 support",
         ),
     }
 }
@@ -315,7 +314,8 @@ fn check_dxvk() -> Check {
         return Check::warn(
             "DXVK / Wine prefix",
             format!("Wine prefix not found at '{}'", prefix.display()),
-            "Run 'wineboot' to initialise your Wine prefix, then install DXVK 2.x",
+            "Run 'wineboot' to initialise your Wine prefix, then install DXVK 2.7.1 \
+             (winetricks dxvk2071)",
         );
     }
 
@@ -334,13 +334,22 @@ fn check_dxvk() -> Check {
         Check::warn(
             "DXVK / d3d9",
             "d3d9.dll not found in Wine prefix — DX9 may not work",
-            "Install DXVK 2.x into your Wine prefix:\
-             \n  Using winetricks:  winetricks dxvk\
-             \n  Manually:          https://github.com/doitsujin/dxvk/releases\
-             \nTested with DXVK 2.7.1 + Wine 9.0 (see mhf-iel README)",
+            DXVK_HINT,
         )
     }
 }
+
+/// Pinned to 2.7.1: DXVK 3.x needs Wine 10.1+ and a Vulkan 1.4 driver, so on
+/// Wine 9.0 (Ubuntu 24.04) it finds no adapter and the game exits. Plain
+/// `winetricks dxvk` installs the latest release, hence the explicit verb.
+#[cfg(target_os = "linux")]
+const DXVK_HINT: &str = "Install DXVK 2.7.1 (tested with Wine 9.0):\
+     \n  Using winetricks:  winetricks dxvk2071   (needs winetricks 2025 or later)\
+     \n  Manually:          copy x32/d3d9.dll and x32/dxgi.dll from\
+     \n                     https://github.com/doitsujin/dxvk/releases/tag/v2.7.1\
+     \n                     into the game folder\
+     \nAvoid plain `winetricks dxvk`: it installs DXVK 3.x, which needs Wine 10.1+\
+     \nand fails with \"No adapters found\" on older Wine.";
 
 #[cfg(target_os = "linux")]
 fn check_japanese_fonts_linux() -> Check {

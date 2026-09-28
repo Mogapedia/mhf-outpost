@@ -7,6 +7,13 @@ this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ## [Unreleased]
 
+### Changed
+
+- **The system check now recommends DXVK 2.7.1** instead of plain
+  `winetricks dxvk`, which installs DXVK 3.x. DXVK 3.x needs Wine 10.1 or
+  newer; on older Wine (such as the Wine 9.0 shipped by Ubuntu 24.04) it finds
+  no graphics adapter and the game closes on launch.
+
 ## [0.1.2] — 2026-09-28
 
 ### Fixed
