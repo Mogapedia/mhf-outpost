@@ -39,7 +39,9 @@ echo "Building mhf-iel-cli.exe from $VENDOR …"
   # --xwin-arch x86 is required because the target is 32-bit Windows;
   # cargo-xwin defaults to x86_64 and would otherwise produce a splat
   # without kernel32.lib / ntdll.lib / etc. for the x86 SDK.
-  cargo xwin build \
+  # +crt-static links the MSVC runtime into the exe, so users don't need the
+  # Visual C++ Redistributable (or winetricks vcrun* under Wine).
+  RUSTFLAGS="${RUSTFLAGS:-} -C target-feature=+crt-static" cargo xwin build \
     --xwin-arch x86 \
     --package mhf-iel-cli \
     --target i686-pc-windows-msvc \
