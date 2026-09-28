@@ -275,7 +275,46 @@ fn check_japanese_fonts_windows() -> Check {
 
 #[cfg(target_os = "linux")]
 fn linux_checks() -> Vec<Check> {
-    vec![check_wine(), check_dxvk(), check_japanese_fonts_linux()]
+    vec![
+        check_wine(),
+        check_dxvk(),
+        check_japanese_locale_linux(),
+        check_japanese_fonts_linux(),
+    ]
+}
+
+/// The launcher runs Wine under `ja_JP.UTF-8` so the game gets code page 932.
+/// glibc ignores a locale that is not installed, and Wine then falls back to
+/// the Western code page (1252), which garbles all the game's text.
+#[cfg(target_os = "linux")]
+fn check_japanese_locale_linux() -> Check {
+    match std::process::Command::new("locale").arg("-a").output() {
+        Ok(out) if out.status.success() => {
+            let stdout = String::from_utf8_lossy(&out.stdout);
+            let installed = stdout.lines().any(|l| {
+                let l = l.trim().to_ascii_lowercase();
+                l == "ja_jp.utf8" || l == "ja_jp.utf-8"
+            });
+            if installed {
+                Check::ok("Japanese locale", "ja_JP.UTF-8 installed")
+            } else {
+                Check::err(
+                    "Japanese locale",
+                    "ja_JP.UTF-8 not installed — game text will be garbled in Wine",
+                    "Install the Japanese locale:\
+                     \n  Fedora:  sudo dnf install glibc-langpack-ja\
+                     \n  Ubuntu:  sudo locale-gen ja_JP.UTF-8\
+                     \n  Arch:    uncomment 'ja_JP.UTF-8 UTF-8' in /etc/locale.gen, then run 'sudo locale-gen'\
+                     \nOnly the game runs in Japanese; your desktop language is unchanged",
+                )
+            }
+        }
+        _ => Check::warn(
+            "Japanese locale",
+            "`locale -a` not available — cannot check for ja_JP.UTF-8",
+            "Make sure the ja_JP.UTF-8 locale is installed on your system",
+        ),
+    }
 }
 
 #[cfg(target_os = "linux")]

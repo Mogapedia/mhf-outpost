@@ -153,6 +153,11 @@ fn platform_exec(exe: &Path, cwd: &Path) -> Result<std::process::Output> {
             if let Ok(out) = std::process::Command::new(bin)
                 .arg(exe)
                 .current_dir(cwd)
+                // The game's text is CP932, and Wine derives the ANSI code
+                // page from the Unix locale. Set it for the game only, so
+                // the launcher keeps the user's language.
+                .env("LANG", "ja_JP.UTF-8")
+                .env("LC_ALL", "ja_JP.UTF-8")
                 .output()
             {
                 return Ok(out);
