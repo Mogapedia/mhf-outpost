@@ -7,6 +7,19 @@ this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ## [Unreleased]
 
+## [0.1.2] — 2026-09-28
+
+### Fixed
+
+- **The game failed to launch with "VCRUNTIME140.dll not found"** ([#4]).
+  The bundled launcher needed the Visual C++ Redistributable, which is
+  missing on some Windows installs and in fresh Wine prefixes. The runtime
+  is now built into the launcher, so nothing extra has to be installed.
+  Players who installed the redistributable or ran `winetricks vcrun2022`
+  as a workaround don't need to undo anything.
+
+[#4]: https://github.com/Mogapedia/mhf-outpost/issues/4
+
 ## [0.1.1] — 2026-09-27
 
 ### Fixed
@@ -84,6 +97,7 @@ game data.
 - Authentication state is held in memory only; signing in again is required
   after restarting the launcher.
 
-[Unreleased]: https://github.com/Mogapedia/mhf-outpost/compare/v0.1.1...HEAD
+[Unreleased]: https://github.com/Mogapedia/mhf-outpost/compare/v0.1.2...HEAD
+[0.1.2]: https://github.com/Mogapedia/mhf-outpost/compare/v0.1.1...v0.1.2
 [0.1.1]: https://github.com/Mogapedia/mhf-outpost/compare/v0.1.0...v0.1.1
 [0.1.0]: https://github.com/Mogapedia/mhf-outpost/releases/tag/v0.1.0

@@ -1,6 +1,6 @@
 {
   "productName": "MHF Launcher",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "identifier": "fr.mogapedia.mhf-launcher",
   "build": {
     "frontendDist": "../dist",
