@@ -7,6 +7,14 @@ this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ## [Unreleased]
 
+### Fixed
+
+- **Japanese text was garbled on Linux.** The game's text uses the Japanese
+  code page (CP932), which Wine only selects under a Japanese locale, and the
+  launcher started Wine in the user's own language. The game now always runs
+  under `ja_JP.UTF-8`; the launcher's own interface keeps your language. The
+  system check reports an error if the `ja_JP.UTF-8` locale is not installed.
+
 ### Changed
 
 - **The system check now recommends DXVK 2.7.1** instead of plain
